@@ -1,0 +1,7 @@
+{
+    "name": "vigil",
+    "version": "1.0.0",
+    "scripts": {
+        "dev":"pnpm --parallel -r run dev"
+    }
+}
