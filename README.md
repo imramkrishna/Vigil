@@ -12,13 +12,14 @@ Unlike fragile single-agent wrappers, Vigil separates its web tier from asynchro
 
 1. [Product Capabilities & Curriculum Mapping](#1-product-capabilities--curriculum-mapping)
 2. [System Architecture & Graph Topologies](#2-system-architecture--graph-topologies)
-3. [Core Engineering Decision Records (ADRs)](#3-core-engineering-decision-records-adrs)
-4. [Data Model & API Surface](#4-data-model--api-surface)
-5. [Evaluation Results & Single-Agent Baseline Comparison](#5-evaluation-results--single-agent-baseline-comparison)
-6. [Security, Multi-Tenant Isolation & Red-Team Report](#6-security-multi-tenant-isolation--red-team-report)
-7. [Observability, Cost per Incident & Budget Enforcement](#7-observability-cost-per-incident--budget-enforcement)
-8. [Local Development & Seeded Demo Quickstart](#8-local-development--seeded-demo-quickstart)
-9. [Implementation Milestones, Rubric & Completion Criteria](#9-implementation-milestones-rubric--completion-criteria)
+3. [Monorepo Folder Structure & Feature-to-Folder Guide](#3-monorepo-folder-structure--feature-to-folder-guide)
+4. [Core Engineering Decision Records (ADRs)](#4-core-engineering-decision-records-adrs)
+5. [Data Model & API Surface](#5-data-model--api-surface)
+6. [Evaluation Results & Single-Agent Baseline Comparison](#6-evaluation-results--single-agent-baseline-comparison)
+7. [Security, Multi-Tenant Isolation & Red-Team Report](#7-security-multi-tenant-isolation--red-team-report)
+8. [Observability, Cost per Incident & Budget Enforcement](#8-observability-cost-per-incident--budget-enforcement)
+9. [Local Development & Seeded Demo Quickstart](#9-local-development--seeded-demo-quickstart)
+10. [Implementation Milestones, Rubric & Completion Criteria](#10-implementation-milestones-rubric--completion-criteria)
 
 ---
 
@@ -155,7 +156,104 @@ export const IncidentState = new StateSchema({
 
 ---
 
-## 3. Core Engineering Decision Records (ADRs)
+## 3. Monorepo Folder Structure & Feature-to-Folder Guide
+
+Vigil uses a zero-build-step `pnpm` workspace monorepo (`apps/*` and `packages/*`) backed by a single root [`tsconfig.base.json`](file:///Users/ramkrishnayadav/Vigil/tsconfig.base.json) (`"moduleResolution": "bundler"`). Shared internal packages export raw TypeScript directly (`"exports": { ".": "./src/index.ts" }`), enabling instant cross-package type-checking and hot reload across the Next.js client, API server, and background workers.
+
+### 3.1 Repository Directory Tree
+
+```text
+vigil/
+├── pnpm-workspace.yaml                 # Declares apps/* and packages/* workspaces
+├── tsconfig.base.json                  # Shared TypeScript compiler settings (ES2022, bundler resolution)
+├── package.json                        # Root scripts (pnpm dev, pnpm typecheck, pnpm eval:ci)
+│
+├── apps/
+│   ├── web/                            # @vigil/web — Next.js Client UI
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── src/
+│   │       ├── app/                    # Next.js App Router pages & layouts
+│   │       ├── components/             # Incident Room, Evidence Chain, Approvals UI components
+│   │       └── lib/                    # API client & resumable SSE hooks
+│   │
+│   ├── api/                            # @vigil/api — HTTP & Resumable SSE Server
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── src/
+│   │       ├── index.ts                # API server entrypoint
+│   │       ├── middleware/             # Auth, RBAC role guards, tenant budget pre-checks
+│   │       ├── routes/                 # /ask, /incidents, /approvals, /documents, /feedback
+│   │       ├── sse/                    # Resumable SSE stream manager (Last-Event-ID)
+│   │       └── sandbox/                # Sandboxed fake Ticketing API & Slack Webhook viewer
+│   │
+│   └── worker/                         # @vigil/worker — BullMQ Background Workers & MCP Server
+│       ├── package.json
+│       ├── tsconfig.json
+│       └── src/
+│           ├── index.ts                # Worker process entrypoint & graceful shutdown
+│           ├── graph-worker.ts         # Executes Ask, Incident, and Postmortem LangGraph runs
+│           ├── ingest-worker.ts        # Chunking, embeddings, tsvector & content_hash dedupe
+│           ├── watchdog.ts             # Stuck-run detector (no checkpoint for N minutes)
+│           └── mcp-server.ts           # Model Context Protocol (MCP) server over docs & ops DB
+│
+└── packages/
+    ├── shared/                         # @vigil/shared — Pure Types, Zod Schemas & Constants
+    │   ├── package.json
+    │   ├── tsconfig.json
+    │   └── src/
+    │       ├── index.ts
+    │       ├── schemas/                # Evidence, Hypothesis, Action, Critique, TimelineEntry, Triage
+    │       ├── rbac.ts                 # Roles ('viewer' | 'responder' | 'lead' | 'admin') & permissions
+    │       └── api-types.ts            # Request/response & SSE event contracts shared with @vigil/web
+    │
+    ├── core/                           # @vigil/core — DB (RLS), Model Access Layer, Queues & Telemetry
+    │   ├── package.json
+    │   ├── tsconfig.json
+    │   └── src/
+    │       ├── index.ts
+    │       ├── db/
+    │       │   ├── migrations/         # 001_core.sql (tables, pgvector, tsvector, forced RLS policies)
+    │       │   ├── seed/               # Seeded Acme Payments Org (8 services, runbooks, 15 incidents)
+    │       │   ├── with-tenant.ts      # Transaction wrapper setting set_config('app.org_id', orgId, true)
+    │       │   └── ops-db.ts           # Read-only connection pool for ops_services, ops_deploys, etc.
+    │       ├── model-layer/
+    │       │   ├── gateway.ts          # Fast vs. Strong tier LLM router + automatic fallbacks
+    │       │   ├── embeddings.ts       # text-embedding-3-small wrapper
+    │       │   └── cost-ledger.ts      # Token & micro-USD metering into model_usage + budget enforcement
+    │       ├── queues/                 # BullMQ queue definitions (ingest, runs, scheduled) + Redis pub/sub
+    │       └── observability/          # Structured Pino logger & LangSmith trace metadata helpers
+    │
+    └── graphs/                         # @vigil/graphs — LangGraph Workflows, Tools & Eval Suites
+        ├── package.json
+        ├── tsconfig.json
+        └── src/
+            ├── index.ts
+            ├── checkpointer.ts         # PostgreSQL-backed LangGraph checkpointer setup
+            ├── tools/
+            │   ├── hybrid-search.ts    # pgvector HNSW + tsvector GIN + Reciprocal Rank Fusion (RRF)
+            │   ├── ops-queries.ts      # Parameterized read-only SQL tools for deploys, metrics, owners
+            │   └── action-executors.ts # Idempotent write executors backed by action_log
+            ├── ask/                    # Graph 1: Corrective-RAG + query_ops branch + citation verifier
+            ├── incident/               # Graph 2: Triage -> Send(docs,data,history) -> Hypothesize -> Critic -> interrupt()
+            ├── postmortem/             # Graph 3: Timeline/evidence synthesis -> human edit interrupt()
+            └── evals/                  # Golden datasets (40+ Ask, 15 Incidents, Red-Team) + CI gate runner
+```
+
+### 3.2 Which Features Belong in Which Folder?
+
+| Workspace Package / App | What Goes Inside (Responsibilities & Features) | What Must **NOT** Go Inside |
+| :--- | :--- | :--- |
+| **`packages/shared`** (`@vigil/shared`) | • **All Zod schemas & TypeScript types** (`Evidence`, `Hypothesis`, `Action`, `ActionResult`, `TimelineEntry`, `Triage`, `Critique`).<br/>• **RBAC role hierarchy & permission helpers** (`viewer`, `responder`, `lead`, `admin`).<br/>• **SSE event payload types** (`node_progress`, `evidence_added`, `approval_required`, `token`) so both `apps/web` and `apps/api` stay strictly typed. | Database drivers (`pg`), Redis clients, Node `fs`, or LLM SDKs (must remain browser-safe for `apps/web`). |
+| **`packages/core`** (`@vigil/core`) | • **Database & Forced RLS:** `001_core.sql` migrations, `withTenant(orgId, fn)` RLS transaction wrapper, read-only `opsDb` pool, and demo seed scripts.<br/>• **Model Access Layer:** Fast/Strong model routing, fallback retries, and automatic token/cost logging to `model_usage` and `tenant_budgets`.<br/>• **Queues & Pub/Sub:** BullMQ `ingestQueue` and `runsQueue` producers, plus Redis event emitters for live SSE streaming.<br/>• **Observability:** Pino structured logger and trace context helpers (`orgId`, `incidentId`, `threadId`). | HTTP routes, UI components, or LangGraph node definitions. |
+| **`packages/graphs`** (`@vigil/graphs`) | • **Ask Graph:** Query analyzer, hybrid search (`pgvector` + `tsvector` + RRF + reranker), `query_ops` SQL branch, citation verifier, and abstention grader.<br/>• **Incident Graph:** `IncidentState`, `triage` node, parallel `Send` fan-out (`docs`, `data`, `history` specialists), `hypothesize` node, bounded `critic` loop (`round < 2`), per-action `interrupt()` approval gate, idempotent `action_log` executor, and `await_updates` interrupt.<br/>• **Postmortem Graph:** Structured postmortem generator linked to evidence IDs + human edit interrupt.<br/>• **Evals & Baseline:** Single-agent baseline and the 4 CI evaluation suites (`Ask`, `Incident`, `Safety`, `Cost/Latency`). | Express/Fastify HTTP handlers or Next.js React components. |
+| **`apps/api`** (`@vigil/api`) | • **Authentication & RBAC Middleware:** Validates session/JWT, resolves `org_id` and user `role`, enforces role gates (`viewer+`, `responder+`, `admin`).<br/>• **Budget Pre-Check Middleware:** Blocks or downgrades requests when a tenant exceeds `tenant_budgets`.<br/>• **9 REST & SSE Endpoints:** `POST /ask`, `POST /incidents`, `GET /incidents/:id/events` (resumable via `Last-Event-ID`), `GET /approvals`, `POST /approvals/:id` (calls `Command({ resume })` and writes `audit_events`), `POST /incidents/:id/notes`, `POST /incidents/:id/resolve`, `POST /documents`, `POST /feedback`.<br/>• **Sandbox Endpoints:** Local fake Ticketing API and Slack Webhook receiver for safe reviewer testing. | Heavy LLM graph execution or PDF/Markdown chunking (must enqueue into BullMQ instead). |
+| **`apps/worker`** (`@vigil/worker`) | • **Graph Worker:** Consumes `runs` queue jobs, executes `@vigil/graphs` (`Ask`, `Incident`, `Postmortem`) with the Postgres checkpointer, and publishes live node/token events to Redis for SSE.<br/>• **Ingestion Worker:** Consumes `ingest` queue jobs, parses Markdown/PDF runbooks, computes `content_hash` to skip duplicates, chunks text, generates `vector(1536)` embeddings and `tsvector`, and writes to `chunks`.<br/>• **Stuck-Run Watchdog:** Scheduled job that detects `investigating` runs with no checkpoint for $N$ minutes.<br/>• **MCP Server:** Exposes Vigil's hybrid runbook search and read-only ops telemetry over the Model Context Protocol. | Public web UI or user-facing session management. |
+| **`apps/web`** (`@vigil/web`) | • **Ask Copilot View:** Streaming chat with clickable inline citations that open the exact runbook chunk and score.<br/>• **Live Incident Room:** Real-time SSE stream showing active graph nodes, parallel specialist progress, ranked `Hypothesis` cards expanding into `Evidence` quotes/SQL results, automatic incident timeline, and engineer note input (`POST /incidents/:id/notes`).<br/>• **Approvals Inbox:** Role-gated inbox displaying pending external write previews (ticket body, Slack payload) with **Approve**, **Edit & Approve**, and **Reject** actions.<br/>• **Postmortem Editor:** Side-by-side evidence-linked Markdown editor to review and save drafted postmortems.<br/>• **Docs Admin & Observability Dashboards:** Runbook uploader (`content_hash` status) + per-org token spend, p50/p95 latency, and approval latency charts. | Direct database queries or raw LLM API keys. |
+
+---
+
+## 4. Core Engineering Decision Records (ADRs)
 
 ### ADR-01: Hybrid Search (`pgvector` HNSW + Full-Text `tsvector`) with Reranking
 - **Context:** Engineering runbooks contain exact error codes (`ERR_CONN_POOL_EXHAUSTED`), commit SHAs (`7f3a91c`), and service names (`payments-service`) alongside conceptual architectural descriptions.
@@ -179,9 +277,9 @@ export const IncidentState = new StateSchema({
 
 ---
 
-## 4. Data Model & API Surface
+## 5. Data Model & API Surface
 
-### 4.1 Core Database Schema (`migrations/001_core.sql`)
+### 5.1 Core Database Schema (`migrations/001_core.sql`)
 
 ```sql
 CREATE TABLE orgs (
@@ -249,7 +347,7 @@ CREATE TABLE action_log (
 -- Forced Row-Level Security (RLS) enabled on every org_id table
 ```
 
-### 4.2 HTTP & Streaming API Surface
+### 5.2 HTTP & Streaming API Surface
 
 | Method & Path | Purpose | Role Required | Notes |
 | :--- | :--- | :--- | :--- |
@@ -265,7 +363,7 @@ CREATE TABLE action_log (
 
 ---
 
-## 5. Evaluation Results & Single-Agent Baseline Comparison
+## 6. Evaluation Results & Single-Agent Baseline Comparison
 
 Vigil's CI pipeline runs four automated evaluation suites on every pull request and blocks merges if any metric drops below its gate or regresses by more than 3 percentage points:
 
@@ -274,7 +372,7 @@ Vigil's CI pipeline runs four automated evaluation suites on every pull request 
 3. **Safety & Red-Team Suite:** Prompt injection documents, cross-org `thread_id` replay attempts, and RBAC role escalation attempts.
 4. **Cost & Latency Suite:** Tracks p50 and p95 cost and latency per graph run, alerting on any $>25\%$ regression.
 
-### 5.1 Benchmark & Ablation Table
+### 6.1 Benchmark & Ablation Table
 
 | Metric | Single-Agent Baseline (5 Tools) | Vigil (Router + 3 Specialists + Critic) | CI Gate Threshold | Status |
 | :--- | :--- | :--- | :--- | :--- |
@@ -289,9 +387,9 @@ Vigil's CI pipeline runs four automated evaluation suites on every pull request 
 
 ---
 
-## 6. Security, Multi-Tenant Isolation & Red-Team Report
+## 7. Security, Multi-Tenant Isolation & Red-Team Report
 
-### 6.1 Threats Considered & Controls Implemented
+### 7.1 Threats Considered & Controls Implemented
 
 | Threat Vector | Control Implemented | Verification |
 | :--- | :--- | :--- |
@@ -302,9 +400,9 @@ Vigil's CI pipeline runs four automated evaluation suites on every pull request 
 
 ---
 
-## 7. Observability, Cost per Incident & Budget Enforcement
+## 8. Observability, Cost per Incident & Budget Enforcement
 
-### 7.1 Tracing, Dashboards & Operational Alerts
+### 8.1 Tracing, Dashboards & Operational Alerts
 - **Structured Trace Metadata:** Every LangGraph execution carries `orgId`, `incidentId`, `threadId`, `graphName`, and `promptVersion` in LangSmith and Pino structured logs.
 - **Dashboards:** Track cost per organization per day, incident run cost distribution, human approval latency (time from action proposal to decision), and evaluation scores over time.
 - **Automated Alerts:**
@@ -313,7 +411,7 @@ Vigil's CI pipeline runs four automated evaluation suites on every pull request 
   - **Stuck Run Watchdog:** Alerts when an incident in `investigating` status writes no checkpoint for $N$ minutes, enabling graceful recovery across worker restarts.
   - Tenant daily/monthly token budget threshold warnings (80% soft alert, 100% hard gate).
 
-### 7.2 Cost & Latency Profile
+### 8.2 Cost & Latency Profile
 
 | Workflow | p50 Cost / Run | p95 Cost / Run | p50 Latency | p95 Latency | Model Routing Strategy |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -321,54 +419,54 @@ Vigil's CI pipeline runs four automated evaluation suites on every pull request 
 | **Incident Graph (Full Triage)** | **$0.038** | **$0.082** | 6.2s | 12.5s | Fast tier for parallel specialist retrieval; Strong tier (`gpt-4o` / `claude-3-5-sonnet`) for `hypothesize` and `critic` |
 | **Postmortem Graph** | **$0.019** | **$0.035** | 4.1s | 7.8s | Strong tier with structured output linked to existing timeline & evidence IDs |
 
-### 7.3 How Budgets Are Enforced
+### 8.3 How Budgets Are Enforced
 1. **Pre-Flight Check:** Before enqueuing any graph run, the API tier checks `tenant_budgets` against the organization's current period spend aggregated in `model_usage`.
 2. **Model Access Layer Metering:** Every LLM and embedding call flows through a centralized Model Access Layer that records prompt tokens, completion tokens, model name, cost in micro-USD, `org_id`, and `trace_id` into `model_usage`.
 3. **Graceful Degradation & Hard Stops:** If a tenant exceeds its soft budget, non-critical workflows downgrade to the Fast model tier; if a tenant hits its hard budget cap, new `Ask` queries return `429 Budget Exceeded` while active critical `Incident` runs are allowed to checkpoint safely.
 
 ---
 
-## 8. Local Development & Seeded Demo Quickstart
+## 9. Local Development & Seeded Demo Quickstart
 
 A reviewer can clone the repository, run one command, and open an incident against realistic seeded demo data in under 10 minutes.
 
-### 8.1 What Is in the Seeded Demo Dataset (`Acme Payments Org`)
+### 9.1 What Is in the Seeded Demo Dataset (`Acme Payments Org`)
 - **8 Microservices:** `api-gateway`, `auth-service`, `payments-service`, `ledger-worker`, `notification-service`, `fraud-scorer`, `checkout-web`, and `webhook-dispatcher`.
 - **Runbooks & Architecture Docs:** 20+ Markdown and PDF runbooks (rollback procedures, connection pool exhaustion playbooks, Redis failover guides, and system architecture topology).
 - **3 Months of Operational Telemetry:** 150+ realistic deployment records (`ops_deploys`) with commit SHAs, authors, and config changes, plus 12 historical incidents (`ops_past_incidents`) and postmortems.
 - **Sandboxed External Integrations:** Built-in local fake Ticketing API and Slack Webhook viewer so reviewers can approve external writes and inspect delivered payloads safely.
 
-### 8.2 Run Locally in 3 Steps
+### 9.2 Run Locally in 3 Steps
 
 ```bash
 # 1. Copy environment variables (pre-configured for local Postgres, Redis, and Sandbox tools)
 cp .env.example .env
 
 # 2. Start Postgres (pgvector), Redis, API, Workers, Sandbox, run migrations, and seed demo data
-docker compose up --build -d && npm run db:setup
+docker compose up --build -d && pnpm db:setup
 
-# 3. Start the Next.js web application and worker suite (or open http://localhost:3000)
-npm run dev
+# 3. Start the Next.js web application, API server, and worker suite in parallel
+pnpm dev
 ```
 
-### 8.3 Verify Reliability, Evaluations & Crash Recovery
+### 9.3 Verify Reliability, Evaluations & Crash Recovery
 
 ```bash
 # Run unit, RLS isolation, and graph route tests
-npm test
+pnpm test
 
 # Run the Ask, Incident Triage, and Red-Team Safety evaluation suites with CI gates
-npm run eval:ci
+pnpm eval:ci
 
 # Run the worker crash-resume durability test (kills worker mid-investigation/approval and verifies zero data loss)
-npm run test:durability
+pnpm test:durability
 ```
 
 ---
 
-## 9. Implementation Milestones, Rubric & Completion Criteria
+## 10. Implementation Milestones, Rubric & Completion Criteria
 
-### 9.1 Engineering Milestones
+### 10.1 Engineering Milestones
 
 | # | Milestone | Done When | Estimate |
 | :--- | :--- | :--- | :--- |
@@ -381,7 +479,7 @@ npm run test:durability
 | **7** | **Quality & Ops** | Eval suites for `Ask` and `Incident` (trajectory + outcome) in CI; dashboards; alerts; red-team suite | 8–12 h |
 | **8** | **Ship** | Containerized deployment, seeded demo org, comprehensive README, architecture write-up, 3-minute demo video | 6–10 h |
 
-### 9.2 Assessment Rubric Alignment
+### 10.2 Assessment Rubric Alignment
 
 | Dimension | Meets the Bar | How Vigil Exceeds the Bar |
 | :--- | :--- | :--- |
@@ -393,7 +491,7 @@ npm run test:durability
 | **Engineering Quality** | Shared packages, typed state, tests | Architectural Decision Records (ADRs) defending every trade-off |
 | **Communication** | Clear README and demo | Complete trade-off analysis, production deployment blueprint, and roadmap |
 
-### 9.3 Completion Criteria Checklist
+### 10.3 Completion Criteria Checklist
 
 - [x] A reviewer can run Vigil locally with seeded demo data in under ten minutes.
 - [x] Opening a demo incident streams a live parallel investigation with evidence-linked hypotheses.
