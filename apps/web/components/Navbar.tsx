@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ArrowRightIcon, GitHubIcon, GITHUB_URL } from "@/components/Icons";
 
 export function TerminalPromptGlyph({
   className = "h-3.5 w-3.5",
@@ -78,16 +79,25 @@ export function Navbar() {
         </div>
 
         {/* Right: Muted 'Log in' + Near-White 'Open Console' Keycap Pill */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3.5">
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Vigil on GitHub"
+            className="text-[#9c9c9d] transition-colors hover:text-white"
+          >
+            <GitHubIcon className="h-[19px] w-[19px]" />
+          </a>
           <Link
             href="/login"
             className="hidden text-[14px] font-medium text-[#9c9c9d] transition-colors hover:text-white sm:inline-block"
           >
             Log in
           </Link>
-          <Link href="/dashboard" className="nav-download-pill">
-            <TerminalPromptGlyph className="h-3.5 w-3.5" />
-            <span>Open Console</span>
+          <Link href="/signup" className="nav-download-pill">
+            <span>Get started</span>
+            <ArrowRightIcon className="h-3.5 w-3.5" />
           </Link>
         </div>
       </nav>

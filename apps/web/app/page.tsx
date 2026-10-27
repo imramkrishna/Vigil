@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuroraBackground } from "@/components/AuroraBackground";
+import { ArrowRightIcon, GitHubIcon, GITHUB_URL } from "@/components/Icons";
 
 interface CommandRow {
   id: string;
@@ -127,24 +128,31 @@ export default function HomePage() {
           external write.
         </p>
 
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3.5">
-          <Link href="/dashboard" className="keycap-download-btn">
-            <span>Launch Incident Room</span>
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+          <Link href="/signup" className="keycap-download-btn !px-6 !py-3">
+            <span>Get started free</span>
+            <ArrowRightIcon className="h-4 w-4" />
           </Link>
 
-          <Link href="/signup" className="keycap-download-btn">
-            <span>Start Free Workspace</span>
-          </Link>
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="glass-btn !px-6 !py-3"
+          >
+            <GitHubIcon />
+            <span>Star on GitHub</span>
+          </a>
         </div>
 
-        <div className="font-mono-only mt-3 flex flex-wrap items-center justify-center gap-2 text-center text-[12px] text-[#9c9c9d]">
+        <div className="font-mono-only mt-4 flex flex-wrap items-center justify-center gap-2 text-center text-[12px] text-[#9c9c9d]">
           <span>docker compose up -d &amp;&amp; pnpm db:setup</span>
-          <span className="text-white/30">—</span>
+          <span className="text-white/30">·</span>
           <Link
-            href="/login"
+            href="/dashboard"
             className="text-white/85 underline decoration-white/30 underline-offset-4 transition-colors hover:text-white hover:decoration-white"
           >
-            Sign in to Seeded Acme Payments Org
+            Or try the demo workspace
           </Link>
         </div>
 
@@ -373,6 +381,15 @@ export default function HomePage() {
             <span className="font-medium text-white">Vigil</span>
           </div>
           <div className="flex items-center gap-5">
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 hover:text-white"
+            >
+              <GitHubIcon className="h-4 w-4" />
+              GitHub
+            </a>
             <Link href="/login" className="hover:text-white">
               Log in
             </Link>
