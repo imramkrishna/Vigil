@@ -5,9 +5,12 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.4"
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
     "typescript": "^5.9.3"
   }

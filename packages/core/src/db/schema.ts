@@ -12,6 +12,9 @@ import {
   uuid,
   vector,
 } from "drizzle-orm/pg-core";
+import { user } from "./auth-schema";
+
+export * from "./auth-schema";
 
 /* -------------------------------------------------------------------------- */
 /* Custom types & shared enums                                                */
@@ -63,7 +66,9 @@ export const members = pgTable(
     orgId: uuid("org_id")
       .notNull()
       .references(() => orgs.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
     role: text("role", { enum: ROLES }).notNull().default("viewer"),
   },
   (t) => [primaryKey({ columns: [t.orgId, t.userId] })]
@@ -134,7 +139,7 @@ export const incidents = pgTable(
     title: text("title").notNull(),
     severity: text("severity", { enum: SEVERITIES }).notNull(),
     status: text("status", { enum: INCIDENT_STATUSES }).notNull().default("investigating"),
-    openedBy: uuid("opened_by"),
+    openedBy: uuid("opened_by").references(() => user.id, { onDelete: "set null" }),
     openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
@@ -163,7 +168,7 @@ export const approvals = pgTable(
       .references(() => incidents.id, { onDelete: "cascade" }),
     action: jsonb("action").$type<ProposedAction>().notNull(),
     decision: text("decision", { enum: APPROVAL_DECISIONS }).notNull().default("pending"),
-    decidedBy: uuid("decided_by"),
+    decidedBy: uuid("decided_by").references(() => user.id, { onDelete: "set null" }),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -218,7 +223,7 @@ export const auditEvents = pgTable(
     orgId: uuid("org_id")
       .notNull()
       .references(() => orgs.id, { onDelete: "cascade" }),
-    actorId: uuid("actor_id"),
+    actorId: uuid("actor_id").references(() => user.id, { onDelete: "set null" }),
     event: text("event").notNull(),
     detail: jsonb("detail").$type<Record<string, unknown>>().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -231,7 +236,7 @@ export const feedback = pgTable("feedback", {
   orgId: uuid("org_id")
     .notNull()
     .references(() => orgs.id, { onDelete: "cascade" }),
-  userId: uuid("user_id"),
+  userId: uuid("user_id").references(() => user.id, { onDelete: "set null" }),
   traceId: text("trace_id").notNull(),
   rating: text("rating", { enum: ["helpful", "flagged"] }).notNull(),
   comment: text("comment"),
