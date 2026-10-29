@@ -3,5 +3,12 @@
   "version": "1.0.0",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^5.9.3"
   }
 }
