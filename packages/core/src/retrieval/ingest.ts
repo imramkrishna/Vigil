@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db, documentChunks, documents } from "../db";
+import { documentChunks, documents, withOrgContext } from "../db";
 import {
   computeContentHash,
   embedChunks,
@@ -29,49 +29,58 @@ export async function ingestDocument(params: IngestDocumentParams): Promise<{
   }
 
   const contentHash = computeContentHash(params.body);
-
-  const existing = await db
-    .select({ id: documents.id })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.orgId, params.orgId),
-        eq(documents.contentHash, contentHash),
-      ),
-    )
-    .limit(1);
-
-  if (existing[0]) {
-    return {
-      skipped: true,
-      documentId: existing[0].id,
-      reason: "Document already exists",
-    };
-  }
-
-  const inserted = await db
-    .insert(documents)
-    .values({
-      name: params.name,
-      mimeType: params.mimeType,
-      size: params.body.length,
-      storageKey: params.storageKey,
-      contentHash,
-      userId: params.userId,
-      orgId: params.orgId,
-      status: "pending",
-    })
-    .returning({ id: documents.id });
-
-  const documentId = inserted[0]?.id;
-  if (!documentId) {
-    throw new Error(`Failed to create document record for ${params.name}`);
-  }
+  let documentId: string | undefined;
 
   try {
+    const created = await withOrgContext(params.orgId, async (tx) => {
+      const existing = await tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.orgId, params.orgId),
+            eq(documents.contentHash, contentHash),
+          ),
+        )
+        .limit(1);
+
+      if (existing[0]) {
+        return {
+          skipped: true,
+          documentId: existing[0].id,
+          reason: "Document already exists",
+        };
+      }
+
+      const inserted = await tx
+        .insert(documents)
+        .values({
+          name: params.name,
+          mimeType: params.mimeType,
+          size: params.body.length,
+          storageKey: params.storageKey,
+          contentHash,
+          userId: params.userId,
+          orgId: params.orgId,
+          status: "pending",
+        })
+        .returning({ id: documents.id });
+
+      documentId = inserted[0]?.id;
+      if (!documentId) {
+        throw new Error(`Failed to create document record for ${params.name}`);
+      }
+
+      return { skipped: false, documentId };
+    });
+
+    if (created.skipped) {
+      return created;
+    }
+
     const pages = await processPdf(
       params.body,
-      documentId,
+      created.documentId,
       undefined,
       params.storageKey,
     );
@@ -80,16 +89,16 @@ export async function ingestDocument(params: IngestDocumentParams): Promise<{
 
     if (embeddings.length !== chunks.length) {
       throw new Error(
-        `Embedding count mismatch for document ${documentId}: ` +
+        `Embedding count mismatch for document ${created.documentId}: ` +
           `${embeddings.length} embeddings for ${chunks.length} chunks`,
       );
     }
 
-    await db.transaction(async (tx) => {
+    await withOrgContext(params.orgId, async (tx) => {
       if (chunks.length > 0) {
         await tx.insert(documentChunks).values(
           chunks.map((chunk, index) => ({
-            documentId,
+            documentId: created.documentId,
             orgId: params.orgId,
             content: chunk.pageContent,
             chunkIndex: index,
@@ -108,24 +117,28 @@ export async function ingestDocument(params: IngestDocumentParams): Promise<{
           updatedAt: new Date(),
           errorMessage: null,
         })
-        .where(eq(documents.id, documentId));
+        .where(eq(documents.id, created.documentId));
     });
 
     return {
       skipped: false,
-      documentId,
+      documentId: created.documentId,
       chunkCount: chunks.length,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await db
-      .update(documents)
-      .set({
-        status: "failed",
-        errorMessage: message,
-        updatedAt: new Date(),
-      })
-      .where(eq(documents.id, documentId));
+    if (documentId) {
+      await withOrgContext(params.orgId, (tx) =>
+        tx
+          .update(documents)
+          .set({
+            status: "failed",
+            errorMessage: message,
+            updatedAt: new Date(),
+          })
+          .where(eq(documents.id, documentId!)),
+      );
+    }
     throw error;
   }
 }
