@@ -3,5 +3,17 @@
   "version": "1.0.0",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.3.2",
+    "@langchain/langgraph": "^1.5.3",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.0",
+    "@vigil/core": "workspace:*",
+    "drizzle-orm": "^0.45.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^5.9.3"
   }
 }
