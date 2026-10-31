@@ -53,6 +53,7 @@ export async function runTools(state: VigilStateType): Promise<VigilUpdateType> 
       services: mergeById(state.opsContext.services, collected.services),
       deploys: mergeById(state.opsContext.deploys, collected.deploys),
       pastIncidents: mergeById(state.opsContext.pastIncidents, collected.pastIncidents),
+      logs: mergeById(state.opsContext.logs, collected.logs),
     },
     timeline: [`Called tools: ${toolCalls.map((c) => c.name).join(", ") || "none"}`],
   };

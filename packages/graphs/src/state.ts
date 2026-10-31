@@ -44,6 +44,7 @@ export const OpsContextSchema = z.object({
   services: z.array(z.record(z.string(), z.unknown())).default([]),
   deploys: z.array(z.record(z.string(), z.unknown())).default([]),
   pastIncidents: z.array(z.record(z.string(), z.unknown())).default([]),
+  logs: z.array(z.record(z.string(), z.unknown())).default([]),
 });
 
 export const VigilState = new StateSchema({
@@ -79,6 +80,7 @@ export const VigilState = new StateSchema({
     services: [],
     deploys: [],
     pastIncidents: [],
+    logs: [],
   })),
   timeline: new ReducedValue(
     z.array(z.string()).default(() => []),

@@ -48,6 +48,56 @@ export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 export const APPROVAL_DECISIONS = ["pending", "approved", "rejected"] as const;
 export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number];
 
+export const DEPLOYMENT_PLATFORMS = [
+  "cloud_run",
+  "aws_lambda",
+  "aws_ec2",
+  "render",
+  "vercel",
+  "custom",
+] as const;
+export type DeploymentPlatform = (typeof DEPLOYMENT_PLATFORMS)[number];
+
+export type PlatformConfig =
+  | {
+      platform: "cloud_run";
+      logUrl?: string;
+      projectId: string;
+      serviceName: string;
+      region?: string;
+    }
+  | {
+      platform: "aws_lambda";
+      logUrl?: string;
+      region: string;
+      functionName: string;
+      logGroupName?: string;
+    }
+  | {
+      platform: "aws_ec2";
+      logUrl?: string;
+      region: string;
+      logGroupName: string;
+      instanceId?: string;
+    }
+  | {
+      platform: "render";
+      logUrl?: string;
+      serviceId: string;
+      ownerId?: string;
+    }
+  | {
+      platform: "vercel";
+      logUrl?: string;
+      projectId: string;
+      teamId?: string;
+      deploymentId?: string;
+    }
+  | {
+      platform: "custom";
+      logUrl: string;
+    };
+
 /** text-embedding-3-small */
 export const EMBEDDING_DIMENSIONS = 1536;
 
@@ -373,6 +423,9 @@ export const opsServices = pgTable(
     tier: integer("tier").notNull().default(1),
     owner: text("owner"),
     slackChannel: text("slack_channel"),
+    platform: text("platform", { enum: DEPLOYMENT_PLATFORMS }),
+    logUrl: text("log_url"),
+    platformConfig: jsonb("platform_config").$type<PlatformConfig>(),
   },
   (t) => [
     uniqueIndex("ops_services_org_name_uq").on(t.orgId, t.name),
