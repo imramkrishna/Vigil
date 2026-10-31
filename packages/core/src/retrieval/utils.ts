@@ -45,16 +45,12 @@ export async function getTextFromUrl(sourceUrl: string): Promise<string> {
   return Buffer.from(arrayBuffer).toString("utf-8");
 }
 
-export async function processPdf(url: string, documentId?: string) {
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch PDF: ${response.status}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
+export async function processPdf(
+  buffer: Buffer,
+  documentId?: string,
+  sourceUrl?: string,
+  storageKey?: string,
+) {
   const parser = new PDFParse({
     data: buffer,
   });
@@ -67,7 +63,8 @@ export async function processPdf(url: string, documentId?: string) {
         pageContent: page.text,
         metadata: {
           page: page.num,
-          sourceUrl: url,
+          sourceUrl,
+          storageKey,
           documentId,
         },
       });
