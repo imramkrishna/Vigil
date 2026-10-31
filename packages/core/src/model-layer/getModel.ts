@@ -14,6 +14,7 @@ export function resolveOpenRouterApiKey(): string {
     try {
       process.loadEnvFile(path.resolve(__dirname, "../../../../.env"));
     } catch {
+      console.log(".env file was not loaded.");
       // Ignore if root .env is not present
     }
   }
