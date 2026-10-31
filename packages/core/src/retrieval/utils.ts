@@ -3,6 +3,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { Document } from "@langchain/core/documents";
 import type { ChunkMetadata } from "../db/schema";
 import { PDFParse } from "pdf-parse";
+import { getEmbeddingModel } from "../model-layer";
 
 export type chunkMetadata = ChunkMetadata;
 
@@ -18,7 +19,7 @@ const splitter = new RecursiveCharacterTextSplitter({
   chunkSize: 1200,
   chunkOverlap: 150,
 });
-
+const embeddingModel = getEmbeddingModel();
 /**
  * Generates a deterministic 64-character SHA-256 hex digest of document content.
  */
@@ -90,4 +91,17 @@ export async function generateChunks(
     };
     return chunk;
   });
+}
+
+export async function embedChunks(chunks: Document[]) {
+  const batchSize = 128;
+  const embeddings = [];
+  for (let i = 0; i < chunks.length; i += batchSize) {
+    let batch = chunks.slice(i, i + batchSize);
+    let batchEmbeddings = await embeddingModel.embedDocuments(
+      batch.map((chunk) => chunk.pageContent),
+    );
+    embeddings.push(...batchEmbeddings);
+  }
+  return embeddings;
 }
