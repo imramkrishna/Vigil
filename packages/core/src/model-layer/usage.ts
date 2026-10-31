@@ -1,43 +1,15 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { modelUsage, tenantBudgets, withOrgContext } from "../db";
 
-export interface RecordModelUsageInput {
-  orgId: string;
-  graph: "ask" | "incident" | "postmortem";
-  threadId?: string;
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  costUsd: number;
-  latencyMs?: number;
-}
-
-export async function recordModelUsage(input: RecordModelUsageInput) {
-  return withOrgContext(input.orgId, async (tx) => {
-    const [row] = await tx
-      .insert(modelUsage)
-      .values({
-        orgId: input.orgId,
-        graph: input.graph,
-        threadId: input.threadId ?? null,
-        model: input.model,
-        inputTokens: input.inputTokens,
-        outputTokens: input.outputTokens,
-        costUsd: input.costUsd,
-        latencyMs: input.latencyMs ?? null,
-      })
-      .returning();
-    return row;
-  });
-}
-
 export async function getMonthlyBudgetStatus(orgId: string): Promise<{
   spentUsd: number;
   limitUsd: number;
   withinBudget: boolean;
 }> {
   const now = new Date();
-  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const startOfMonth = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+  );
 
   return withOrgContext(orgId, async (tx) => {
     const [budgetRow] = await tx
