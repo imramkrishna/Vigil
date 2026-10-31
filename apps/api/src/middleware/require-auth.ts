@@ -1,4 +1,4 @@
-import { db, members, orgs, type Role } from "@vigil/core";
+import { members, orgs, type Role, withUserContext } from "@vigil/core";
 import { fromNodeHeaders } from "better-auth/node";
 import { and, eq } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
@@ -23,7 +23,8 @@ declare global {
 
 /**
  * Verifies the Better Auth session cookie/bearer token, resolves the user's
- * active organization and RBAC role from `members`, and attaches `req.auth`.
+ * active organization and RBAC role from `members` under `withUserContext`,
+ * and attaches `req.auth`.
  */
 export async function requireAuth(
   req: Request,
@@ -42,23 +43,25 @@ export async function requireAuth(
 
     const requestedOrgId = req.header("x-org-id");
 
-    const rows = await db
-      .select({
-        orgId: members.orgId,
-        role: members.role,
-        orgName: orgs.name,
-      })
-      .from(members)
-      .innerJoin(orgs, eq(orgs.id, members.orgId))
-      .where(
-        requestedOrgId
-          ? and(
-              eq(members.userId, session.user.id),
-              eq(members.orgId, requestedOrgId)
-            )
-          : eq(members.userId, session.user.id)
-      )
-      .limit(1);
+    const rows = await withUserContext(session.user.id, (tx) =>
+      tx
+        .select({
+          orgId: members.orgId,
+          role: members.role,
+          orgName: orgs.name,
+        })
+        .from(members)
+        .innerJoin(orgs, eq(orgs.id, members.orgId))
+        .where(
+          requestedOrgId
+            ? and(
+                eq(members.userId, session.user.id),
+                eq(members.orgId, requestedOrgId)
+              )
+            : eq(members.userId, session.user.id)
+        )
+        .limit(1)
+    );
 
     const membership = rows[0];
     if (!membership) {

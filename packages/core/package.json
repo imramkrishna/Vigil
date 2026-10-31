@@ -4,6 +4,10 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
   "dependencies": {
     "drizzle-orm": "^0.45.4",
     "pg": "^8.23.1"

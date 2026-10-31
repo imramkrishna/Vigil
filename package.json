@@ -1,7 +1,9 @@
 {
-    "name": "vigil",
-    "version": "1.0.0",
-    "scripts": {
-        "dev":"pnpm --parallel -r run dev"
-    }
+  "name": "vigil",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "db:generate": "pnpm --filter @vigil/core db:generate",
+    "db:migrate": "pnpm --filter @vigil/core db:migrate"
+  }
 }
