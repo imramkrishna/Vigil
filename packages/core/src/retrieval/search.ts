@@ -14,8 +14,6 @@ export type SearchResult = {
   score: number;
 };
 
-const embeddingModel = getEmbeddingModel();
-
 export async function semanticSearch(
   orgId: string,
   query: string,
@@ -23,6 +21,7 @@ export async function semanticSearch(
 ): Promise<SearchResult[]> {
   if (limit <= 0) return [];
 
+  const embeddingModel = getEmbeddingModel();
   const [queryEmbedding] = await embeddingModel.embedDocuments([query]);
   if (!queryEmbedding) {
     throw new Error("Failed to generate an embedding for the search query");

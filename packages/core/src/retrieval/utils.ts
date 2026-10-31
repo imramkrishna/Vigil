@@ -19,7 +19,6 @@ const splitter = new RecursiveCharacterTextSplitter({
   chunkSize: 1200,
   chunkOverlap: 150,
 });
-const embeddingModel = getEmbeddingModel();
 /**
  * Generates a deterministic 64-character SHA-256 hex digest of document content.
  */
@@ -50,6 +49,7 @@ export async function processPdf(
   documentId?: string,
   sourceUrl?: string,
   storageKey?: string,
+  documentName?: string,
 ) {
   const parser = new PDFParse({
     data: buffer,
@@ -66,6 +66,8 @@ export async function processPdf(
           sourceUrl,
           storageKey,
           documentId,
+          documentName,
+          title: documentName,
         },
       });
     });
@@ -91,11 +93,12 @@ export async function generateChunks(
 }
 
 export async function embedChunks(chunks: Document[]) {
+  const embeddingModel = getEmbeddingModel();
   const batchSize = 128;
   const embeddings = [];
   for (let i = 0; i < chunks.length; i += batchSize) {
-    let batch = chunks.slice(i, i + batchSize);
-    let batchEmbeddings = await embeddingModel.embedDocuments(
+    const batch = chunks.slice(i, i + batchSize);
+    const batchEmbeddings = await embeddingModel.embedDocuments(
       batch.map((chunk) => chunk.pageContent),
     );
     embeddings.push(...batchEmbeddings);

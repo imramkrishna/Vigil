@@ -83,6 +83,7 @@ export async function ingestDocument(params: IngestDocumentParams): Promise<{
       created.documentId,
       undefined,
       params.storageKey,
+      params.name,
     );
     const chunks = await generateChunks(pages);
     const embeddings = await embedChunks(chunks);

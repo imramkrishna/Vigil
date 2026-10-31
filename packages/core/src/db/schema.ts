@@ -362,18 +362,31 @@ export const feedback = pgTable("feedback", {
 /* Kept in the same file for now. Move to a separate DB + role later.         */
 /* -------------------------------------------------------------------------- */
 
-export const opsServices = pgTable("ops_services", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull().unique(),
-  tier: integer("tier").notNull().default(1),
-  owner: text("owner"),
-  slackChannel: text("slack_channel"),
-});
+export const opsServices = pgTable(
+  "ops_services",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tier: integer("tier").notNull().default(1),
+    owner: text("owner"),
+    slackChannel: text("slack_channel"),
+  },
+  (t) => [
+    uniqueIndex("ops_services_org_name_uq").on(t.orgId, t.name),
+    index("ops_services_org_idx").on(t.orgId),
+  ],
+);
 
 export const opsDeploys = pgTable(
   "ops_deploys",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
     service: text("service").notNull(),
     sha: text("sha").notNull(),
     author: text("author"),
@@ -385,18 +398,31 @@ export const opsDeploys = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("ops_deploys_service_time_idx").on(t.service, t.deployedAt)],
+  (t) => [
+    index("ops_deploys_org_service_time_idx").on(
+      t.orgId,
+      t.service,
+      t.deployedAt,
+    ),
+  ],
 );
 
-export const opsPastIncidents = pgTable("ops_past_incidents", {
-  id: text("id").primaryKey(), // e.g. "INC-1812"
-  service: text("service").notNull(),
-  summary: text("summary").notNull(),
-  rootCause: text("root_cause"),
-  resolution: text("resolution"),
-  minutesToResolve: integer("minutes_to_resolve"),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-});
+export const opsPastIncidents = pgTable(
+  "ops_past_incidents",
+  {
+    id: text("id").primaryKey(), // e.g. "INC-1812"
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    service: text("service").notNull(),
+    summary: text("summary").notNull(),
+    rootCause: text("root_cause"),
+    resolution: text("resolution"),
+    minutesToResolve: integer("minutes_to_resolve"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("ops_past_incidents_org_service_idx").on(t.orgId, t.service)],
+);
 
 /* -------------------------------------------------------------------------- */
 /* Inferred row types                                                         */
