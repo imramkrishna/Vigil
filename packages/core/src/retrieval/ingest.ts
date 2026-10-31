@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { documentChunks, documents, withOrgContext } from "../db";
+import { getPublicUrl } from "../config/s3.services";
 import {
   computeContentHash,
   embedChunks,
@@ -14,6 +15,7 @@ type IngestDocumentParams = {
   userId: string;
   orgId: string;
   storageKey: string;
+  sourceUrl?: string;
 };
 
 export async function ingestDocument(params: IngestDocumentParams): Promise<{
@@ -78,10 +80,11 @@ export async function ingestDocument(params: IngestDocumentParams): Promise<{
       return created;
     }
 
+    const sourceUrl = params.sourceUrl ?? getPublicUrl(params.storageKey);
     const pages = await processPdf(
       params.body,
       created.documentId,
-      undefined,
+      sourceUrl,
       params.storageKey,
       params.name,
     );

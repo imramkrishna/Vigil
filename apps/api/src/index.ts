@@ -4,6 +4,7 @@ import cors from "cors";
 import express from "express";
 import { auth } from "./auth";
 import { requireAuth } from "./middleware/require-auth";
+import { docsRouter } from "./routes/docs";
 
 export const app = express();
 
@@ -27,6 +28,8 @@ app.get("/health", (_req, res) => {
 app.get("/api/me", requireAuth, (req, res) => {
   res.json({ user: req.auth });
 });
+
+app.use("/api/docs", docsRouter);
 
 const port = Number(process.env.PORT ?? 4000);
 

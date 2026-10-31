@@ -1,6 +1,6 @@
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { S3 } from "./s3.config.js";
-import { db, documents } from "../db/index.js";
+import { S3 } from "./s3.config";
+import { db, documents } from "../db/index";
 
 function generateKey(fileName: string): string {
   const timestamp = new Date()
@@ -9,6 +9,14 @@ function generateKey(fileName: string): string {
     .replace(/:/g, "-")
     .split(".")[0];
   return `${fileName}-${Math.floor(Math.random() * 1000)}-${timestamp}`;
+}
+
+export function getPublicUrl(key: string): string {
+  const baseUrl = (process.env.S3_PUBLIC_DEPLOYMENT_URL ?? "").replace(
+    /\/+$/,
+    ""
+  );
+  return `${baseUrl}/${encodeURIComponent(key)}`;
 }
 
 export async function saveDocument(params: {
