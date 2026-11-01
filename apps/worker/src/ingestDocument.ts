@@ -28,7 +28,7 @@ export async function ingestDocument(params: IngestDocumentParams): Promise<{
     if (embeddings.length !== chunks.length) {
       throw new Error(
         `Embedding count mismatch for document ${documentId}: ` +
-          `${embeddings.length} embeddings for ${chunks.length} chunks`
+          `${embeddings.length} embeddings for ${chunks.length} chunks`,
       );
     }
 
@@ -52,7 +52,7 @@ export async function ingestDocument(params: IngestDocumentParams): Promise<{
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await markDocumentFailed(orgId, documentId, message);
+    console.log("Error in ingestDocument : ", message);
     throw error;
   }
 }
