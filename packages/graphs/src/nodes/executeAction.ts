@@ -1,5 +1,8 @@
-import { eq } from "drizzle-orm";
-import { actionLog, incidents, withOrgContext } from "@vigil/core";
+import {
+  findActionLogByKey,
+  saveActionLog,
+  updateIncidentStatus,
+} from "@vigil/core";
 import type { VigilStateType, VigilUpdateType } from "../state";
 
 export async function executeAction(
@@ -11,43 +14,34 @@ export async function executeAction(
 
   const key = state.proposedAction.idempotencyKey;
 
-  const executionResult = await withOrgContext(state.orgId, async (tx) => {
-    const existing = await tx
-      .select()
-      .from(actionLog)
-      .where(eq(actionLog.idempotencyKey, key))
-      .limit(1);
-
-    if (existing[0]?.result) {
-      return existing[0].result;
-    }
-
-    const resultPayload: Record<string, unknown> = {
-      executedAt: new Date().toISOString(),
-      kind: state.proposedAction!.kind,
-      target: state.proposedAction!.target,
-      title: state.proposedAction!.title,
-      status: "completed",
+  const existing = await findActionLogByKey(state.orgId, key);
+  if (existing?.result) {
+    return {
+      executionResult: existing.result,
+      timeline: [`Action already executed (idempotent): ${state.proposedAction.title}`],
     };
+  }
 
-    await tx.insert(actionLog).values({
-      idempotencyKey: key,
-      orgId: state.orgId,
-      result: resultPayload,
-    });
+  const resultPayload: Record<string, unknown> = {
+    executedAt: new Date().toISOString(),
+    kind: state.proposedAction.kind,
+    target: state.proposedAction.target,
+    title: state.proposedAction.title,
+    status: "completed",
+  };
 
-    if (state.incidentId) {
-      await tx
-        .update(incidents)
-        .set({ status: "monitoring" })
-        .where(eq(incidents.id, state.incidentId));
-    }
-
-    return resultPayload;
+  await saveActionLog({
+    orgId: state.orgId,
+    idempotencyKey: key,
+    result: resultPayload,
   });
 
+  if (state.incidentId) {
+    await updateIncidentStatus(state.orgId, state.incidentId, "monitoring");
+  }
+
   return {
-    executionResult,
+    executionResult: resultPayload,
     timeline: [`Executed action: ${state.proposedAction.title}`],
   };
 }

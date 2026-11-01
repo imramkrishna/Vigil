@@ -1,6 +1,5 @@
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { S3 } from "./s3.config";
-import { db, documents } from "../db/index";
 
 function generateKey(fileName: string): string {
   const timestamp = new Date()
@@ -17,33 +16,6 @@ export function getPublicUrl(key: string): string {
     ""
   );
   return `${baseUrl}/${encodeURIComponent(key)}`;
-}
-
-export async function saveDocument(params: {
-  name: string;
-  userId: string;
-  orgId?: string;
-  mimeType: string;
-  size: number;
-  storageKey: string;
-  contentHash?: string;
-}) {
-  const { name, userId, orgId, mimeType, size, storageKey, contentHash } =
-    params;
-  const inserted = await db
-    .insert(documents)
-    .values({
-      name,
-      userId,
-      orgId: orgId ?? null,
-      mimeType,
-      size,
-      storageKey,
-      contentHash: contentHash ?? null,
-    })
-    .returning({ id: documents.id });
-  console.log("Saved Document to the database : ", name, storageKey);
-  return inserted[0]?.id;
 }
 
 export async function uploadFileToS3(params: {

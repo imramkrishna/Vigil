@@ -1,9 +1,14 @@
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 import {
+  actionLog,
+  approvals,
+  incidents,
   opsDeploys,
   opsPastIncidents,
   opsServices,
   withOrgContext,
+  type IncidentStatus,
+  type ProposedAction,
 } from "../db";
 
 export async function getServiceByName(orgId: string, serviceName: string) {
@@ -128,5 +133,108 @@ export async function getPastIncidentById(orgId: string, incidentId: string) {
       )
       .limit(1);
     return rows[0] ?? null;
+  });
+}
+
+// ─── Incident, Approval & Action Log Helpers ───────────────────────
+
+export async function getIncidentById(orgId: string, incidentId: string) {
+  return withOrgContext(orgId, async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(incidents)
+      .where(
+        and(eq(incidents.id, incidentId), eq(incidents.orgId, orgId))
+      )
+      .limit(1);
+    return row ?? null;
+  });
+}
+
+export async function updateIncidentStatus(
+  orgId: string,
+  incidentId: string,
+  status: IncidentStatus
+): Promise<void> {
+  await withOrgContext(orgId, async (tx) => {
+    await tx
+      .update(incidents)
+      .set({
+        status,
+        ...(status === "resolved" ? { resolvedAt: new Date() } : {}),
+      })
+      .where(
+        and(eq(incidents.id, incidentId), eq(incidents.orgId, orgId))
+      );
+  });
+}
+
+export async function createPendingApproval(params: {
+  orgId: string;
+  incidentId: string;
+  action: ProposedAction;
+}): Promise<string | null> {
+  return withOrgContext(params.orgId, async (tx) => {
+    const [inserted] = await tx
+      .insert(approvals)
+      .values({
+        orgId: params.orgId,
+        incidentId: params.incidentId,
+        action: params.action,
+        decision: "pending",
+      })
+      .returning({ id: approvals.id });
+    return inserted?.id ?? null;
+  });
+}
+
+export async function listApprovalsForIncident(
+  orgId: string,
+  incidentId: string
+) {
+  return withOrgContext(orgId, async (tx) => {
+    return tx
+      .select()
+      .from(approvals)
+      .where(
+        and(
+          eq(approvals.incidentId, incidentId),
+          eq(approvals.orgId, orgId)
+        )
+      )
+      .orderBy(desc(approvals.createdAt));
+  });
+}
+
+export async function findActionLogByKey(
+  orgId: string,
+  idempotencyKey: string
+) {
+  return withOrgContext(orgId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(actionLog)
+      .where(
+        and(
+          eq(actionLog.idempotencyKey, idempotencyKey),
+          eq(actionLog.orgId, orgId)
+        )
+      )
+      .limit(1);
+    return existing ?? null;
+  });
+}
+
+export async function saveActionLog(params: {
+  orgId: string;
+  idempotencyKey: string;
+  result: Record<string, unknown>;
+}): Promise<void> {
+  await withOrgContext(params.orgId, async (tx) => {
+    await tx.insert(actionLog).values({
+      idempotencyKey: params.idempotencyKey,
+      orgId: params.orgId,
+      result: params.result,
+    });
   });
 }

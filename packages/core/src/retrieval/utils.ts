@@ -45,14 +45,11 @@ export async function getTextFromUrl(sourceUrl: string): Promise<string> {
 }
 
 export async function processPdf(
-  buffer: Buffer,
+  documentUrl: string,
   documentId?: string,
-  sourceUrl?: string,
-  storageKey?: string,
-  documentName?: string,
 ) {
   const parser = new PDFParse({
-    data: buffer,
+    url: documentUrl,
   });
 
   try {
@@ -63,11 +60,8 @@ export async function processPdf(
         pageContent: page.text,
         metadata: {
           page: page.num,
-          sourceUrl,
-          storageKey,
+          sourceUrl: documentUrl,
           documentId,
-          documentName,
-          title: documentName,
         },
       });
     });

@@ -1,13 +1,15 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import multer, { MulterError } from "multer";
-import { desc, eq } from "drizzle-orm";
 import {
-  documents,
+  checkIfDocumentExists,
+  computeContentHash,
+  deleteDocument,
   getPublicUrl,
-  ingestDocument,
+  listDocuments,
+  saveDocument,
   uploadFileToS3,
-  withOrgContext,
 } from "@vigil/core";
+import { injestionQueue } from "@vigil/worker/queue";
 import { requireAuth, requireRole } from "../middleware/require-auth";
 
 export const docsRouter = Router();
@@ -40,7 +42,7 @@ function handleUploadMiddleware(
   });
 }
 
-// POST /api/docs/upload — Upload PDF to S3 and ingest chunks into Postgres
+// POST /api/docs/upload — Upload PDF to S3, save document record, and ingest via documentUrl
 docsRouter.post(
   "/upload",
   requireAuth,
@@ -72,30 +74,53 @@ docsRouter.post(
       }
 
       const { userId, orgId } = req.auth!;
+      const contentHash = computeContentHash(file.buffer);
 
+      // 1. Check for duplicate document before uploading to S3
+      const existing = await checkIfDocumentExists(orgId, contentHash);
+      if (existing.exists && existing.documentId) {
+        res.status(200).json({
+          skipped: true,
+          documentId: existing.documentId,
+          reason: "Document already exists",
+        });
+        return;
+      }
+
+      // 2. Upload PDF to S3 and get public documentUrl
       const storageKey = await uploadFileToS3({
         bucket,
         body: file.buffer,
         fileName: file.originalname,
         mimetype: file.mimetype,
       });
+      const documentUrl = getPublicUrl(storageKey);
 
-      const sourceUrl = getPublicUrl(storageKey);
-
-      const result = await ingestDocument({
-        body: file.buffer,
+      // 3. Save pending document record
+      const documentId = await saveDocument({
+        orgId,
+        userId,
         name: file.originalname,
         mimeType: file.mimetype,
-        userId,
-        orgId,
+        size: file.size,
         storageKey,
-        sourceUrl,
+        contentHash,
       });
 
-      res.status(result.skipped ? 200 : 201).json({
-        ...result,
+      // 4. Enqueue background ingestion job in BullMQ worker
+      const job = await injestionQueue.add("ingest-document", {
+        documentUrl,
+        documentId,
+        orgId,
+      });
+
+      res.status(202).json({
+        skipped: false,
+        documentId,
+        jobId: job.id,
+        status: "pending",
         storageKey,
-        sourceUrl,
+        documentUrl,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to upload and ingest document";
@@ -108,18 +133,11 @@ docsRouter.post(
 docsRouter.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const { orgId } = req.auth!;
-
-    const rows = await withOrgContext(orgId, (tx) =>
-      tx
-        .select()
-        .from(documents)
-        .where(eq(documents.orgId, orgId))
-        .orderBy(desc(documents.createdAt))
-    );
+    const rows = await listDocuments(orgId);
 
     const data = rows.map((doc) => ({
       ...doc,
-      sourceUrl: getPublicUrl(doc.storageKey),
+      documentUrl: getPublicUrl(doc.storageKey),
     }));
 
     res.json({ documents: data });
@@ -128,3 +146,27 @@ docsRouter.get("/", requireAuth, async (req: Request, res: Response) => {
     res.status(500).json({ error: message });
   }
 });
+
+// DELETE /api/docs/:id — Delete a document and its chunks
+docsRouter.delete(
+  "/:id",
+  requireAuth,
+  requireRole("admin", "lead"),
+  async (req: Request, res: Response) => {
+    try {
+      const { orgId } = req.auth!;
+      const documentId = String(req.params.id ?? "");
+
+      const deleted = await deleteDocument(orgId, documentId);
+      if (!deleted) {
+        res.status(404).json({ error: "Document not found." });
+        return;
+      }
+
+      res.json({ deleted });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete document";
+      res.status(500).json({ error: message });
+    }
+  }
+);

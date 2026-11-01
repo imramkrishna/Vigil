@@ -1,6 +1,5 @@
-import { eq } from "drizzle-orm";
 import { interrupt } from "@langchain/langgraph";
-import { approvals, incidents, withOrgContext } from "@vigil/core";
+import { createPendingApproval, updateIncidentStatus } from "@vigil/core";
 import type { VigilStateType, VigilUpdateType } from "../state";
 
 export async function awaitApproval(
@@ -10,24 +9,17 @@ export async function awaitApproval(
     return { approvalDecision: null };
   }
 
-  const approvalId = await withOrgContext(state.orgId, async (tx) => {
-    const [inserted] = await tx
-      .insert(approvals)
-      .values({
-        orgId: state.orgId,
-        incidentId: state.incidentId!,
-        action: state.proposedAction!,
-        decision: "pending",
-      })
-      .returning({ id: approvals.id });
-
-    await tx
-      .update(incidents)
-      .set({ status: "awaiting_approval" })
-      .where(eq(incidents.id, state.incidentId!));
-
-    return inserted?.id ?? null;
+  const approvalId = await createPendingApproval({
+    orgId: state.orgId,
+    incidentId: state.incidentId,
+    action: state.proposedAction,
   });
+
+  await updateIncidentStatus(
+    state.orgId,
+    state.incidentId,
+    "awaiting_approval"
+  );
 
   const resumePayload = interrupt({
     approvalId,

@@ -1,6 +1,9 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
-import { approvals, createTierModels, incidents, withOrgContext } from "@vigil/core";
+import {
+  createTierModels,
+  getIncidentById,
+  listApprovalsForIncident,
+} from "@vigil/core";
 import { DRAFT_POSTMORTEM_SYSTEM_PROMPT } from "../systemPrompts";
 import {
   ActionItemSchema,
@@ -16,22 +19,12 @@ const PostmortemOutputSchema = z.object({
 export async function draftPostmortem(
   state: VigilStateType
 ): Promise<VigilUpdateType> {
-  const incidentData = state.incidentId
-    ? await withOrgContext(state.orgId, async (tx) => {
-        const [inc] = await tx
-          .select()
-          .from(incidents)
-          .where(eq(incidents.id, state.incidentId!))
-          .limit(1);
-
-        const incApprovals = await tx
-          .select()
-          .from(approvals)
-          .where(eq(approvals.incidentId, state.incidentId!));
-
-        return { incident: inc ?? null, approvals: incApprovals };
-      })
-    : { incident: null, approvals: [] };
+  const [incident, approvals] = state.incidentId
+    ? await Promise.all([
+        getIncidentById(state.orgId, state.incidentId),
+        listApprovalsForIncident(state.orgId, state.incidentId),
+      ])
+    : [null, []];
 
   const { primary, fallback } = createTierModels("strong", {
     orgId: state.orgId,
@@ -55,7 +48,7 @@ export async function draftPostmortem(
       role: "user",
       content: JSON.stringify({
         query: state.query,
-        incidentData,
+        incidentData: { incident, approvals },
         hypotheses: state.hypotheses,
         timeline: state.timeline,
         executionResult: state.executionResult,
