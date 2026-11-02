@@ -423,6 +423,8 @@ export const opsServices = pgTable(
     tier: integer("tier").notNull().default(1),
     owner: text("owner"),
     slackChannel: text("slack_channel"),
+    repoUrl: text("repo_url"),
+    githubBranch: text("github_branch").default("main"),
     platform: text("platform", { enum: DEPLOYMENT_PLATFORMS }),
     logUrl: text("log_url"),
     platformConfig: jsonb("platform_config").$type<PlatformConfig>(),
