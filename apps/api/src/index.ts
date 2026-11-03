@@ -4,7 +4,11 @@ import cors from "cors";
 import express from "express";
 import { auth } from "./auth";
 import { requireAuth } from "./middleware/require-auth";
+import { approvalsRouter } from "./routes/approvals";
+import { askRouter } from "./routes/ask";
 import { docsRouter } from "./routes/docs";
+import { incidentsRouter } from "./routes/incidents";
+import { opsRouter } from "./routes/ops";
 
 export const app = express();
 
@@ -30,6 +34,10 @@ app.get("/api/me", requireAuth, (req, res) => {
 });
 
 app.use("/api/docs", docsRouter);
+app.use("/api/ask", askRouter);
+app.use("/api/incidents", incidentsRouter);
+app.use("/api/approvals", approvalsRouter);
+app.use("/api/ops", opsRouter);
 
 const port = Number(process.env.PORT ?? 4000);
 

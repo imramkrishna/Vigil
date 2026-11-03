@@ -4,7 +4,9 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@langchain/langgraph": "^1.5.3",
     "@vigil/core": "workspace:*",
+    "@vigil/graphs": "workspace:*",
     "@vigil/shared": "workspace:*",
     "@vigil/worker": "workspace:*",
     "better-auth": "^1.7.14",

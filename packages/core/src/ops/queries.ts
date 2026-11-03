@@ -7,8 +7,12 @@ import {
   opsPastIncidents,
   opsServices,
   withOrgContext,
+  type ApprovalDecision,
+  type DeploymentPlatform,
   type IncidentStatus,
+  type PlatformConfig,
   type ProposedAction,
+  type Severity,
 } from "../db";
 
 export async function getServiceByName(orgId: string, serviceName: string) {
@@ -236,5 +240,156 @@ export async function saveActionLog(params: {
       orgId: params.orgId,
       result: params.result,
     });
+  });
+}
+
+export async function createIncident(params: {
+  orgId: string;
+  threadId: string;
+  title: string;
+  severity: Severity;
+  openedBy?: string;
+}) {
+  return withOrgContext(params.orgId, async (tx) => {
+    const [created] = await tx
+      .insert(incidents)
+      .values({
+        orgId: params.orgId,
+        threadId: params.threadId,
+        title: params.title,
+        severity: params.severity,
+        status: "investigating",
+        openedBy: params.openedBy ?? null,
+      })
+      .returning();
+    return created!;
+  });
+}
+
+export async function listIncidents(orgId: string) {
+  return withOrgContext(orgId, async (tx) => {
+    return tx
+      .select()
+      .from(incidents)
+      .where(eq(incidents.orgId, orgId))
+      .orderBy(desc(incidents.openedAt));
+  });
+}
+
+export async function listApprovals(
+  orgId: string,
+  decision?: ApprovalDecision
+) {
+  return withOrgContext(orgId, async (tx) => {
+    if (decision) {
+      return tx
+        .select()
+        .from(approvals)
+        .where(
+          and(eq(approvals.orgId, orgId), eq(approvals.decision, decision))
+        )
+        .orderBy(desc(approvals.createdAt));
+    }
+    return tx
+      .select()
+      .from(approvals)
+      .where(eq(approvals.orgId, orgId))
+      .orderBy(desc(approvals.createdAt));
+  });
+}
+
+export async function decideApproval(params: {
+  orgId: string;
+  approvalId: string;
+  decision: "approved" | "rejected";
+  decidedBy: string;
+}) {
+  return withOrgContext(params.orgId, async (tx) => {
+    const [updated] = await tx
+      .update(approvals)
+      .set({
+        decision: params.decision,
+        decidedBy: params.decidedBy,
+        decidedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(approvals.id, params.approvalId),
+          eq(approvals.orgId, params.orgId)
+        )
+      )
+      .returning();
+
+    if (!updated) {
+      return null;
+    }
+
+    const [incident] = await tx
+      .select()
+      .from(incidents)
+      .where(
+        and(
+          eq(incidents.id, updated.incidentId),
+          eq(incidents.orgId, params.orgId)
+        )
+      )
+      .limit(1);
+
+    return { approval: updated, incident: incident ?? null };
+  });
+}
+
+export async function listOpsServices(orgId: string) {
+  return withOrgContext(orgId, async (tx) => {
+    return tx
+      .select()
+      .from(opsServices)
+      .where(eq(opsServices.orgId, orgId))
+      .orderBy(opsServices.tier, opsServices.name);
+  });
+}
+
+export async function upsertOpsService(params: {
+  orgId: string;
+  name: string;
+  tier?: number;
+  owner?: string;
+  slackChannel?: string;
+  repoUrl?: string;
+  githubBranch?: string;
+  platform?: DeploymentPlatform;
+  logUrl?: string;
+  platformConfig?: PlatformConfig;
+}) {
+  return withOrgContext(params.orgId, async (tx) => {
+    const [row] = await tx
+      .insert(opsServices)
+      .values({
+        orgId: params.orgId,
+        name: params.name.trim(),
+        tier: params.tier ?? 1,
+        owner: params.owner ?? null,
+        slackChannel: params.slackChannel ?? null,
+        repoUrl: params.repoUrl ?? null,
+        githubBranch: params.githubBranch ?? "main",
+        platform: params.platform ?? null,
+        logUrl: params.logUrl ?? null,
+        platformConfig: params.platformConfig ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [opsServices.orgId, opsServices.name],
+        set: {
+          tier: params.tier ?? 1,
+          owner: params.owner ?? null,
+          slackChannel: params.slackChannel ?? null,
+          repoUrl: params.repoUrl ?? null,
+          githubBranch: params.githubBranch ?? "main",
+          platform: params.platform ?? null,
+          logUrl: params.logUrl ?? null,
+          platformConfig: params.platformConfig ?? null,
+        },
+      })
+      .returning();
+    return row!;
   });
 }
