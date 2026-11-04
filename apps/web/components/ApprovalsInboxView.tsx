@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { decideApproval, listApprovals, type ApprovalRow } from "@/lib/api";
 
-interface Approval {
+interface ApprovalItem {
   id: string;
   title: string;
   target: string;
@@ -11,7 +12,7 @@ interface Approval {
   status: "pending" | "approved" | "rejected";
 }
 
-const INITIAL: Approval[] = [
+const INITIAL: ApprovalItem[] = [
   {
     id: "a1",
     title: "Create ticket: roll back checkout-api",
@@ -48,25 +49,73 @@ const INITIAL: Approval[] = [
   },
 ];
 
+function mapApprovalRow(r: ApprovalRow): ApprovalItem {
+  const entries = Object.entries(r.action?.payload ?? {}).map(
+    ([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)] as [string, string]
+  );
+  return {
+    id: r.id,
+    title: r.action?.title || "Proposed remediation action",
+    target: r.action?.target || r.action?.kind || "Ops",
+    why: r.action?.rationale || "Grounded in incident investigation evidence.",
+    details: entries.length > 0 ? entries : [["Incident", r.incidentId]],
+    status: r.decision,
+  };
+}
+
 export function ApprovalsInboxView({
   currentRole = "lead",
 }: {
   currentRole?: "viewer" | "responder" | "lead" | "admin";
 }) {
-  const [items, setItems] = useState(INITIAL);
+  const [items, setItems] = useState<ApprovalItem[]>(INITIAL);
   const [selectedId, setSelectedId] = useState("a1");
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    listApprovals()
+      .then((rows) => {
+        if (rows.length > 0) {
+          const mapped = rows.map(mapApprovalRow);
+          setItems(mapped);
+          setSelectedId(mapped[0]!.id);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const selected = items.find((i) => i.id === selectedId) ?? items[0];
-  const canDecide = currentRole !== "viewer" && selected.status === "pending";
+  const canDecide =
+    currentRole !== "viewer" && selected?.status === "pending" && !submitting;
 
-  const decide = (status: "approved" | "rejected") =>
-    setItems((prev) => prev.map((i) => (i.id === selected.id ? { ...i, status } : i)));
+  const decide = async (status: "approved" | "rejected") => {
+    if (!selected) return;
+    setSubmitting(true);
+    setFeedback(null);
+    setItems((prev) =>
+      prev.map((i) => (i.id === selected.id ? { ...i, status } : i))
+    );
+    try {
+      const res = await decideApproval(selected.id, status);
+      if (res.answer) {
+        setFeedback(res.answer);
+      }
+    } catch {
+      // Offline demo fallback
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-  const badge = (s: Approval["status"]) =>
+  const badge = (s: ApprovalItem["status"]) =>
     s === "pending"
       ? "border-amber-400/25 bg-amber-400/10 text-amber-300"
       : s === "approved"
         ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
         : "border-[#ff5a4a]/30 bg-[#ff5a4a]/10 text-[#ff8a78]";
+
+  if (!selected) return null;
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
@@ -77,7 +126,10 @@ export function ApprovalsInboxView({
         {items.map((i) => (
           <button
             key={i.id}
-            onClick={() => setSelectedId(i.id)}
+            onClick={() => {
+              setSelectedId(i.id);
+              setFeedback(null);
+            }}
             className={`w-full rounded-xl border p-4 text-left transition-colors ${
               i.id === selected.id
                 ? "dash-row-active"
@@ -86,7 +138,9 @@ export function ApprovalsInboxView({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-[12px] text-[#9c9c9d]">{i.target}</span>
-              <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize ${badge(i.status)}`}>
+              <span
+                className={`rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize ${badge(i.status)}`}
+              >
                 {i.status}
               </span>
             </div>
@@ -97,7 +151,9 @@ export function ApprovalsInboxView({
 
       <div className="dash-card p-6 lg:col-span-3">
         <div className="dash-eyebrow">{selected.target}</div>
-        <h3 className="mt-1 text-[20px] font-semibold tracking-[-0.02em]">{selected.title}</h3>
+        <h3 className="mt-1 text-[20px] font-semibold tracking-[-0.02em]">
+          {selected.title}
+        </h3>
 
         <div className="mt-5">
           <div className="dash-eyebrow">Why Vigil suggests this</div>
@@ -113,8 +169,16 @@ export function ApprovalsInboxView({
           ))}
         </dl>
 
+        {feedback && (
+          <p className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3.5 py-2.5 text-[13px] text-emerald-300">
+            {feedback}
+          </p>
+        )}
+
         {currentRole === "viewer" && (
-          <p className="mt-4 text-[12.5px] text-[#ffb347]">Viewers can't approve actions.</p>
+          <p className="mt-4 text-[12.5px] text-[#ffb347]">
+            Viewers can&apos;t approve actions.
+          </p>
         )}
 
         <div className="mt-6 flex justify-end gap-2.5">
@@ -130,7 +194,7 @@ export function ApprovalsInboxView({
             onClick={() => decide("approved")}
             className="dash-btn-primary"
           >
-            Approve
+            {submitting ? "Executing…" : "Approve"}
           </button>
         </div>
       </div>

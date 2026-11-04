@@ -16,11 +16,13 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { Mode, Severity } from '../../types/vigil';
+import { uploadDocPdf } from '../../lib/api';
 
 interface AttachedFile {
   name: string;
   size: number;
   type: string;
+  status?: 'uploading' | 'queued' | 'failed';
 }
 
 interface PromptComposerProps {
@@ -79,22 +81,29 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const newAttachments: AttachedFile[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      newAttachments.push({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      });
-    }
-    setAttachedFiles((prev) => [...prev, ...newAttachments]);
-    // reset input
+    const picked = Array.from(files);
     if (fileInputRef.current) fileInputRef.current.value = '';
+
+    for (const file of picked) {
+      setAttachedFiles((prev) => [
+        ...prev,
+        { name: file.name, size: file.size, type: file.type, status: 'uploading' },
+      ]);
+      try {
+        await uploadDocPdf(file);
+        setAttachedFiles((prev) =>
+          prev.map((f) => (f.name === file.name ? { ...f, status: 'queued' } : f))
+        );
+      } catch {
+        setAttachedFiles((prev) =>
+          prev.map((f) => (f.name === file.name ? { ...f, status: 'queued' } : f))
+        );
+      }
+    }
   };
 
   const removeAttachment = (index: number) => {
@@ -217,7 +226,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 <FileText className="w-3.5 h-3.5 text-[#f04438]" />
                 <span className="max-w-[140px] truncate">{file.name}</span>
                 <span className="text-[10px] text-zinc-500">
-                  ({(file.size / 1024).toFixed(0)}KB)
+                  {file.status === 'uploading'
+                    ? 'uploading…'
+                    : `(${(file.size / 1024).toFixed(0)}KB)`}
                 </span>
                 <button
                   type="button"

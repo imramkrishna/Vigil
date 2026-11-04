@@ -4,15 +4,29 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuroraBackground } from "@/components/AuroraBackground";
+import { signInEmail } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    router.push("/dashboard");
+    setLoading(true);
+    setError(null);
+    try {
+      await signInEmail(email, password);
+      router.push("/dashboard");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Invalid email or password."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -55,8 +69,15 @@ export default function LoginPage() {
                 className="mt-1.5 w-full rounded-lg border border-white/15 bg-[#07080a] px-3.5 py-2.5 text-[14px] outline-none focus:border-[#ff6b4a]"
               />
             </div>
-            <button type="submit" className="keycap-download-btn mt-2 w-full !py-3">
-              Log in
+            {error && (
+              <p className="text-[12.5px] text-rose-400">{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="keycap-download-btn mt-2 w-full !py-3"
+            >
+              {loading ? "Signing in…" : "Log in"}
             </button>
           </form>
 

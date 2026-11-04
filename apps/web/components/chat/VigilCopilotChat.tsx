@@ -52,6 +52,33 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedThreadId, setCopiedThreadId] = useState(false);
+  const [liveDeployDiffs, setLiveDeployDiffs] = useState<
+    Array<{ commit: string; author: string; message: string; diffStat: string }>
+  >([]);
+
+  useEffect(() => {
+    if (!isEvidenceOpen) return;
+    fetch(`${API_BASE}/api/ops/deploys`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.deploys) return;
+        setLiveDeployDiffs(
+          data.deploys.slice(0, 8).map((d: Record<string, unknown>) => {
+            const diff = (d.configDiff ?? {}) as Record<string, unknown>;
+            const stats = diff.stats as { additions?: number; deletions?: number } | undefined;
+            return {
+              commit: String(d.sha ?? '').slice(0, 7),
+              author: String(d.author ?? 'unknown'),
+              message: String(d.message ?? diff.message ?? `Deploy to ${d.service ?? 'service'}`),
+              diffStat: stats
+                ? `+${stats.additions ?? 0} -${stats.deletions ?? 0}`
+                : '+1 -1',
+            };
+          })
+        );
+      })
+      .catch(() => {});
+  }, [isEvidenceOpen]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -210,6 +237,38 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
           setIsGenerating(false);
           onSendMessage?.(liveTurn);
           return;
+        }
+      } else if (mode === 'postmortem') {
+        const listRes = await fetch(`${API_BASE}/api/incidents`, { credentials: 'include' });
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          const latestIncident = listData.incidents?.[0];
+          if (latestIncident?.id) {
+            const pmRes = await fetch(
+              `${API_BASE}/api/incidents/${latestIncident.id}/postmortem`,
+              { method: 'POST', credentials: 'include' }
+            );
+            if (pmRes.ok) {
+              const pmData = await pmRes.json();
+              if (pmData.threadId) setThreadId(pmData.threadId);
+              const liveTurn: ChatTurn = {
+                id: `asst_${Date.now()}`,
+                role: 'assistant',
+                mode: 'postmortem',
+                createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                content: `Generated blameless postmortem for **${latestIncident.title}** (${latestIncident.severity}).`,
+                confidence: 'high',
+                grounded: true,
+                timeline: pmData.timeline || [],
+                postmortemMarkdown: pmData.postmortemMarkdown,
+                actionItems: pmData.actionItems || [],
+              };
+              setTurns((prev) => [...prev, liveTurn]);
+              setIsGenerating(false);
+              onSendMessage?.(liveTurn);
+              return;
+            }
+          }
         }
       }
     } catch {
@@ -666,7 +725,8 @@ gcloud run services update-traffic checkout-api \\
         isOpen={isEvidenceOpen}
         onClose={() => setIsEvidenceOpen(false)}
         citations={allCitations}
-              />
+        deployDiffs={liveDeployDiffs}
+      />
 
       {/* Service & Live Log Configuration Modal */}
       <ServicePlatformModal

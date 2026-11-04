@@ -4,16 +4,30 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuroraBackground } from "@/components/AuroraBackground";
+import { signUpEmail } from "@/lib/api";
 
 export default function SignupPage() {
   const router = useRouter();
   const [team, setTeam] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    router.push("/dashboard");
+    setLoading(true);
+    setError(null);
+    try {
+      await signUpEmail(team, email, password);
+      router.push("/dashboard");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not create workspace."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fieldClass =
@@ -50,8 +64,15 @@ export default function SignupPage() {
               </label>
               <input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className={fieldClass} />
             </div>
-            <button type="submit" className="keycap-download-btn mt-2 w-full !py-3">
-              Create workspace
+            {error && (
+              <p className="text-[12.5px] text-rose-400">{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="keycap-download-btn mt-2 w-full !py-3"
+            >
+              {loading ? "Creating workspace…" : "Create workspace"}
             </button>
           </form>
 

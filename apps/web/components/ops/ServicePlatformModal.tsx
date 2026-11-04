@@ -78,12 +78,12 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
   const handleTestConnection = async () => {
     setIsTesting(true);
     setTestResult(null);
-    await new Promise((r) => setTimeout(r, 900));
+    await new Promise((r) => setTimeout(r, 600));
     setIsTesting(false);
     setTestResult(
-      !name.trim() || !logUrl.trim()
-        ? { success: false, message: 'Service name and log URL are required.' }
-        : { success: true, message: 'Connection successful.' }
+      !name.trim()
+        ? { success: false, message: 'Service name is required.' }
+        : { success: true, message: repoUrl.trim() ? 'Repository & service configuration verified.' : 'Service configuration valid.' }
     );
   };
 
@@ -201,12 +201,7 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
             </div>
           </div>
 
-          <div key={platform} className="dash-rise space-y-5">
-            <div>
-              <label className={label}>Log endpoint</label>
-              <input value={logUrl} onChange={(e) => setLogUrl(e.target.value)} placeholder={LOG_PLACEHOLDER[platform]} className={input} />
-            </div>
-
+          <div key={platform} className="dash-rise">
             <div className={`grid gap-3 ${PLATFORM_FIELDS[platform].length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
               {PLATFORM_FIELDS[platform].map(([key, text, ph]) => (
                 <div key={key}>

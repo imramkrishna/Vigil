@@ -3,12 +3,7 @@ import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import express from "express";
 import { auth } from "./auth";
-import { requireAuth } from "./middleware/require-auth";
-import { approvalsRouter } from "./routes/approvals";
-import { askRouter } from "./routes/ask";
-import { docsRouter } from "./routes/docs";
-import { incidentsRouter } from "./routes/incidents";
-import { opsRouter } from "./routes/ops";
+import { apiRouter } from "./routes";
 
 export const app = express();
 
@@ -28,16 +23,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "@vigil/api" });
 });
 
-// Returns the current authenticated user, active workspace (orgId), and RBAC role
-app.get("/api/me", requireAuth, (req, res) => {
-  res.json({ user: req.auth });
-});
-
-app.use("/api/docs", docsRouter);
-app.use("/api/ask", askRouter);
-app.use("/api/incidents", incidentsRouter);
-app.use("/api/approvals", approvalsRouter);
-app.use("/api/ops", opsRouter);
+app.use("/api", apiRouter);
 
 const port = Number(process.env.PORT ?? 4000);
 

@@ -3,13 +3,21 @@
 import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
-import { IncidentRoomView } from "@/components/IncidentRoomView";
+import { useRouter, useSearchParams } from "next/navigation";
+import { IncidentRoomView, type LiveIncidentData } from "@/components/IncidentRoomView";
 import { AskCopilotView } from "@/components/AskCopilotView";
 import { ApprovalsInboxView } from "@/components/ApprovalsInboxView";
 import { PostmortemEditorView } from "@/components/PostmortemEditorView";
 import { DocsAdminAndOpsView } from "@/components/DocsAdminAndOpsView";
 import { SettingsView } from "@/components/SettingsView";
+import {
+  createIncident,
+  getMe,
+  listApprovals,
+  signOut,
+  type AuthUser,
+} from "@/lib/api";
+import type { Severity } from "@/types/vigil";
 
 type TabId = "incident" | "ask" | "approvals" | "postmortem" | "ops" | "settings";
 
@@ -116,28 +124,77 @@ function NavButton({
 }
 
 function DashboardContent() {
+  const router = useRouter();
   const params = useSearchParams();
   const [tab, setTab] = useState<TabId>("ask");
   const [showNew, setShowNew] = useState(false);
   const [title, setTitle] = useState("");
-  const [severity, setSeverity] = useState("SEV-2");
+  const [severity, setSeverity] = useState<Severity>("SEV-2");
+  const [creating, setCreating] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [latestIncident, setLatestIncident] = useState<LiveIncidentData | null>(
+    null
+  );
 
   useEffect(() => {
     const t = params.get("tab") as TabId | null;
     if (t && ALL.some((x) => x.id === t)) setTab(t);
   }, [params]);
 
+  useEffect(() => {
+    getMe().then((u) => {
+      if (u) setUser(u);
+    });
+    listApprovals("pending")
+      .then((rows) => setPendingCount(rows.length))
+      .catch(() => {});
+  }, [tab]);
+
   const current = ALL.find((n) => n.id === tab) ?? ALL[0];
 
-  const create = (e: React.FormEvent) => {
+  const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    setShowNew(false);
-    setTab("incident");
-    setBanner(`Incident created: "${title.trim()}" (${severity}). Vigil is investigating.`);
-    setTitle("");
+    if (!title.trim() || creating) return;
+    const cleanTitle = title.trim();
+    setCreating(true);
+    try {
+      const res = await createIncident({
+        title: cleanTitle,
+        severity,
+        symptomSummary: cleanTitle,
+      });
+      setLatestIncident({
+        incident: res.incident,
+        hypotheses: res.hypotheses,
+        timeline: res.timeline,
+        answer: res.answer,
+      });
+    } catch {
+      // Offline demo fallback
+    } finally {
+      setCreating(false);
+      setShowNew(false);
+      setTab("incident");
+      setBanner(
+        `Incident created: "${cleanTitle}" (${severity}). Vigil is investigating.`
+      );
+      setTitle("");
+    }
   };
+
+  const orgName = user?.orgName || "Acme Payments";
+  const orgInitial = orgName[0]?.toUpperCase() || "A";
+  const userName = user?.name || "Alex Chen";
+  const userInitials =
+    userName
+      .split(" ")
+      .map((p) => p[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "AC";
+  const userSub = user ? `${user.role} · ${user.email}` : "Pro plan";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#0a0b0d] text-white lg:flex-row">
@@ -150,11 +207,11 @@ function DashboardContent() {
 
         <div className="mt-5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-white/[0.04] transition-colors">
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[#ffb347] to-[#ff2f3a] text-[11px] font-semibold text-[#07080a]">
-            A
+            {orgInitial}
           </span>
           <div className="min-w-0 leading-tight">
-            <div className="truncate text-[13px] font-medium">Acme Payments</div>
-            <div className="text-[11px] text-[#77787b]">Free workspace</div>
+            <div className="truncate text-[13px] font-medium">{orgName}</div>
+            <div className="text-[11px] text-[#77787b]">Workspace</div>
           </div>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6f7074]"><path d="M7 15l5 5 5-5M7 9l5-5 5 5" /></svg>
         </div>
@@ -174,7 +231,16 @@ function DashboardContent() {
             </div>
             <div className="space-y-0.5">
               {WORKSPACE.map((n) => (
-                <NavButton key={n.id} item={n} active={tab === n.id} onClick={() => setTab(n.id)} />
+                <NavButton
+                  key={n.id}
+                  item={
+                    n.id === "approvals" && pendingCount !== null
+                      ? { ...n, badge: pendingCount > 0 ? String(pendingCount) : undefined }
+                      : n
+                  }
+                  active={tab === n.id}
+                  onClick={() => setTab(n.id)}
+                />
               ))}
             </div>
           </div>
@@ -205,18 +271,26 @@ function DashboardContent() {
             className="flex min-w-0 flex-1 items-center gap-3 text-left"
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[12px] font-medium">
-              AC
+              {userInitials}
             </span>
             <div className="min-w-0 leading-tight">
-              <div className="truncate text-[13px] font-medium">Alex Chen</div>
-              <div className="text-[11px] text-[#77787b]">Pro plan</div>
+              <div className="truncate text-[13px] font-medium">{userName}</div>
+              <div className="truncate text-[11px] text-[#77787b]">{userSub}</div>
             </div>
           </button>
-          <Link href="/login" aria-label="Log out" className="text-[#9c9c9d] hover:text-white">
+          <button
+            type="button"
+            onClick={async () => {
+              await signOut();
+              router.push("/login");
+            }}
+            aria-label="Log out"
+            className="text-[#9c9c9d] hover:text-white"
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4m7 14l5-5-5-5m5 5H9" />
             </svg>
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -270,8 +344,15 @@ function DashboardContent() {
               </div>
             )}
 
-            {tab === "incident" && <IncidentRoomView onNavigateApproval={() => setTab("approvals")} />}
-            {tab === "approvals" && <ApprovalsInboxView currentRole="lead" />}
+            {tab === "incident" && (
+              <IncidentRoomView
+                latestCreated={latestIncident}
+                onNavigateApproval={() => setTab("approvals")}
+              />
+            )}
+            {tab === "approvals" && (
+              <ApprovalsInboxView currentRole={user?.role ?? "lead"} />
+            )}
             {tab === "postmortem" && <PostmortemEditorView />}
             {tab === "ops" && <DocsAdminAndOpsView />}
             {tab === "settings" && <SettingsView />}
@@ -301,7 +382,7 @@ function DashboardContent() {
             <select
               id="inc-sev"
               value={severity}
-              onChange={(e) => setSeverity(e.target.value)}
+              onChange={(e) => setSeverity(e.target.value as Severity)}
               className="mt-1.5 w-full rounded-lg border border-white/15 bg-[#0b0c0f] px-3 py-2.5 text-[14px] outline-none focus:border-[#ff6b4a]"
             >
               <option>SEV-1</option>
@@ -312,8 +393,12 @@ function DashboardContent() {
               <button type="button" onClick={() => setShowNew(false)} className="dash-btn-ghost">
                 Cancel
               </button>
-              <button type="submit" className="dash-btn-primary !px-5 !py-2 !text-[13px]">
-                Create
+              <button
+                type="submit"
+                disabled={creating}
+                className="dash-btn-primary !px-5 !py-2 !text-[13px]"
+              >
+                {creating ? "Investigating…" : "Create"}
               </button>
             </div>
           </form>

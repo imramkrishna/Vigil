@@ -1,6 +1,7 @@
 import { tool, type StructuredToolInterface } from "@langchain/core/tools";
 import { z } from "zod";
 import {
+  fetchGitHubDeploysForOrg,
   fetchLiveLogs,
   fetchLogs,
   getPastIncidents,
@@ -97,15 +98,23 @@ export function createVigilTools(orgId: string) {
 
   const getDeploys = tool(
     async ({ service, limit }) => {
-      const rows = await getRecentDeploys(orgId, service, limit ?? 5);
-      collected.deploys.push(...(rows as unknown as Row[]));
-      if (rows.length === 0) return "No recent deploys found.";
-      return JSON.stringify(rows);
+      const max = limit ?? 5;
+      const [dbRows, ghRows] = await Promise.all([
+        getRecentDeploys(orgId, service, max),
+        fetchGitHubDeploysForOrg(orgId, service, max),
+      ]);
+      const combined = [...(ghRows as unknown as Row[]), ...(dbRows as unknown as Row[])].slice(
+        0,
+        max
+      );
+      collected.deploys.push(...combined);
+      if (combined.length === 0) return "No recent deploys found.";
+      return JSON.stringify(combined);
     },
     {
       name: "get_recent_deploys",
       description:
-        "List recent deploys (sha, author, config diff, status). Omit `service` to see deploys across all services. Use when looking for a change that could have caused a problem.",
+        "List recent deploys and GitHub commits (sha, author, config diff, status). Omit `service` to see deploys across all services. Use when looking for a change that could have caused a problem.",
       schema: z.object({
         service: z.string().optional(),
         limit: z.number().int().min(1).max(10).optional(),
