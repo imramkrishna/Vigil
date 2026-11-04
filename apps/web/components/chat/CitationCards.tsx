@@ -85,7 +85,7 @@ export const CitationCards: React.FC<CitationCardsProps> = ({
                 onClick={() => setActiveSnippetId(isSelected ? null : c.sourceId)}
                 className={`w-full text-left p-2 rounded-lg border transition-all text-xs flex items-center justify-between gap-2 ${
                   isSelected
-                    ? 'bg-[#1e1e26] border-[#f04438]/50 shadow-md ring-1 ring-[#f04438]/20'
+                    ? 'bg-[#1e1e26] border-[#e07a67]/50 shadow-md ring-1 ring-[#e07a67]/20'
                     : 'bg-[#131317] hover:bg-[#18181f] border-white/10 hover:border-white/20'
                 }`}
               >
@@ -126,7 +126,7 @@ export const CitationCards: React.FC<CitationCardsProps> = ({
 
               {/* Expanded Snippet Popover */}
               {isSelected && (
-                <div className="mt-1.5 p-3 rounded-lg bg-[#0e0e12] border border-[#f04438]/30 shadow-lg text-[11.5px] animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="mt-1.5 p-3 rounded-lg bg-[#0e0e12] border border-[#e07a67]/30 shadow-lg text-[11.5px] animate-in fade-in slide-in-from-top-1 duration-150">
                   <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/[0.06]">
                     <span className="text-[10.5px] uppercase tracking-wider font-semibold text-zinc-400">
                       Verified Passage
@@ -136,13 +136,13 @@ export const CitationCards: React.FC<CitationCardsProps> = ({
                         href={c.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[11px] text-[#f04438] hover:underline flex items-center gap-1 font-mono"
+                        className="text-[11px] text-[#e07a67] hover:underline flex items-center gap-1 font-mono"
                       >
                         Source Document <ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     )}
                   </div>
-                  <blockquote className="italic text-zinc-300 font-mono text-[11px] leading-relaxed bg-black/40 p-2 rounded border-l-2 border-[#f04438]">
+                  <blockquote className="italic text-zinc-300 font-mono text-[11px] leading-relaxed bg-black/40 p-2 rounded border-l-2 border-[#e07a67]">
                     "{c.snippet}"
                   </blockquote>
                 </div>

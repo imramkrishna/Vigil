@@ -71,7 +71,7 @@ export const IncidentHypothesisPanel: React.FC<IncidentHypothesisPanelProps> = (
         <div className="rounded-xl border border-white/10 bg-[#121216]/95 backdrop-blur-md p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/[0.06]">
             <div className="flex items-center gap-2">
-              <span className="p-1 rounded bg-[#f04438]/10 text-[#f04438] border border-[#f04438]/20">
+              <span className="p-1 rounded bg-[#e07a67]/10 text-[#e07a67] border border-[#e07a67]/20">
                 <AlertOctagon className="w-3.5 h-3.5" />
               </span>
               <h4 className="text-xs font-semibold text-zinc-100 uppercase tracking-wider">
@@ -93,7 +93,7 @@ export const IncidentHypothesisPanel: React.FC<IncidentHypothesisPanelProps> = (
                   key={idx}
                   className={`p-3 rounded-lg border transition-all ${
                     isTop
-                      ? 'bg-[#181820] border-[#f04438]/40 shadow-[0_0_15px_-4px_rgba(240,68,56,0.15)]'
+                      ? 'bg-[#181820] border-[#e07a67]/40 shadow-[0_0_15px_-4px_rgba(224,122,103,0.15)]'
                       : 'bg-[#141418] border-white/5'
                   }`}
                 >
@@ -102,7 +102,7 @@ export const IncidentHypothesisPanel: React.FC<IncidentHypothesisPanelProps> = (
                       <span
                         className={`text-[11px] font-mono px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${
                           isTop
-                            ? 'bg-[#f04438] text-white'
+                            ? 'bg-[#e07a67] text-white'
                             : 'bg-white/10 text-zinc-400'
                         }`}
                       >
@@ -117,7 +117,7 @@ export const IncidentHypothesisPanel: React.FC<IncidentHypothesisPanelProps> = (
                       <span
                         className={`text-xs font-mono font-bold ${
                           percentage >= 75
-                            ? 'text-[#f04438]'
+                            ? 'text-[#e07a67]'
                             : percentage >= 50
                             ? 'text-amber-400'
                             : 'text-zinc-400'
@@ -133,7 +133,7 @@ export const IncidentHypothesisPanel: React.FC<IncidentHypothesisPanelProps> = (
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         percentage >= 75
-                          ? 'bg-gradient-to-r from-orange-500 to-[#f04438]'
+                          ? 'bg-gradient-to-r from-orange-500 to-[#e07a67]'
                           : percentage >= 50
                           ? 'bg-gradient-to-r from-amber-500 to-amber-400'
                           : 'bg-zinc-500'
@@ -277,7 +277,7 @@ export const IncidentHypothesisPanel: React.FC<IncidentHypothesisPanelProps> = (
                 <button
                   type="button"
                   onClick={() => onDecideApproval?.(approvalId || 'action_1', 'approved')}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-red-600 via-[#f04438] to-orange-600 hover:from-red-500 hover:to-orange-500 shadow-md shadow-[#f04438]/25 border border-[#ff6b5b]/40 transition-all flex items-center gap-1.5 hover:scale-[1.02] active:scale-[0.98]"
+                  className="dash-btn-primary"
                 >
                   <Zap className="w-3.5 h-3.5 text-zinc-400" />
                   Approve & Execute

@@ -125,7 +125,7 @@ export function IncidentRoomView({
               </div>
               <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/[0.07]">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#ff9a5a] to-[#f04438]"
+                  className="h-full rounded-full bg-gradient-to-r from-[#ff9a5a] to-[#e07a67]"
                   style={{ width: `${c.confidence}%` }}
                 />
               </div>

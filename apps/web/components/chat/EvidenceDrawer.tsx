@@ -1,26 +1,56 @@
 "use client";
 
 import React, { useState } from 'react';
-import {
-  X,
-  FileText,
-  Terminal,
-  Layers,
-  Search,
-  ExternalLink,
-  BookOpen,
-  CheckCircle2,
-  Filter,
-} from 'lucide-react';
+import { X, Copy, Check, ExternalLink } from 'lucide-react';
 import type { Citation } from '../../types/vigil';
+
+type Log = { timestamp: string; level: 'ERROR' | 'WARN' | 'INFO'; message: string; traceId?: string };
+type Deploy = { commit: string; author: string; message: string; diffStat: string };
+type Tab = 'all' | 'sources' | 'logs' | 'deploys';
 
 interface EvidenceDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   citations: Citation[];
-  liveLogs?: Array<{ timestamp: string; level: 'ERROR' | 'WARN' | 'INFO'; message: string; traceId?: string }>;
-  deployDiffs?: Array<{ commit: string; author: string; message: string; diffStat: string }>;
+  liveLogs?: Log[];
+  deployDiffs?: Deploy[];
 }
+
+const LEVEL: Record<Log['level'], { bar: string; text: string }> = {
+  ERROR: { bar: 'bg-rose-400', text: 'text-rose-300' },
+  WARN: { bar: 'bg-amber-400', text: 'text-amber-300' },
+  INFO: { bar: 'bg-zinc-500', text: 'text-zinc-400' },
+};
+
+const CopyButton: React.FC<{ value: string }> = ({ value }) => {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label="Copy"
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(value);
+        setDone(true);
+        setTimeout(() => setDone(false), 1500);
+      }}
+      className="rounded p-1 text-zinc-600 opacity-0 transition-all hover:bg-white/[0.08] hover:text-white group-hover:opacity-100"
+    >
+      {done ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+    </button>
+  );
+};
+
+const Heading: React.FC<{ children: React.ReactNode; count: number }> = ({ children, count }) => (
+  <div className="flex items-center justify-between px-1 pb-2">
+    <h4 className="text-[12px] font-medium text-zinc-400">{children}</h4>
+    <span className="text-[11px] tabular-nums text-zinc-600">{count}</span>
+  </div>
+);
+
+const rowStyle = (i: number) => ({ animationDelay: `${i * 45}ms` });
+const row =
+  'dash-rise group relative cursor-pointer rounded-xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-3 text-left transition-all hover:-translate-y-px hover:border-white/[0.14] hover:bg-white/[0.04]';
 
 export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
   isOpen,
@@ -29,202 +59,161 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
   liveLogs = [],
   deployDiffs = [],
 }) => {
-  const [filterType, setFilterType] = useState<'all' | 'citations' | 'logs' | 'deploys'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [tab, setTab] = useState<Tab>('all');
+  const [open, setOpen] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const filteredCitations = citations.filter(
-    (c) =>
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.snippet.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.sourceId.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const filteredLogs = liveLogs.filter(
-    (l) =>
-      l.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.traceId?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const total = citations.length + liveLogs.length + deployDiffs.length;
+  const tabs: { id: Tab; label: string; n: number }[] = [
+    { id: 'all', label: 'All', n: total },
+    { id: 'sources', label: 'Sources', n: citations.length },
+    { id: 'logs', label: 'Logs', n: liveLogs.length },
+    { id: 'deploys', label: 'Deploys', n: deployDiffs.length },
+  ];
+  const show = (t: Tab) => tab === 'all' || tab === t;
+  const toggle = (id: string) => setOpen((o) => (o === id ? null : id));
 
   return (
-    <aside className="w-80 md:w-96 border-l border-white/10 bg-[#0f0f14]/95 backdrop-blur-2xl flex flex-col h-full shadow-2xl z-40 animate-in slide-in-from-right duration-200">
-      {/* Header */}
-      <div className="p-4 border-b border-white/[0.08] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="p-1.5 rounded-lg bg-[#f04438]/15 border border-[#f04438]/30 text-[#f04438]">
-            <BookOpen className="w-4 h-4" />
+    <aside className="dash-slide z-40 flex h-full w-80 flex-col border-l border-white/[0.06] bg-[#0b0c0f] md:w-[380px]">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-5">
+        <div className="flex items-center gap-2.5">
+          <h3 className="text-[14px] font-medium text-white">Evidence</h3>
+          <span className="flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[11px] text-emerald-300">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="dash-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            </span>
+            Live
           </span>
-          <div>
-            <h3 className="text-sm font-semibold text-white">Evidence & Citations</h3>
-            <p className="text-[11px] font-mono text-zinc-500">
-              Verified Runbooks, Diffs & Logs
-            </p>
-          </div>
         </div>
-
         <button
           type="button"
           onClick={onClose}
-          className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
-          title="Close Evidence Drawer"
+          aria-label="Close"
+          className="-mr-2 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-white"
         >
-          <X className="w-4 h-4" />
+          <X className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Search & Filter Bar */}
-      <div className="p-3 border-b border-white/[0.06] space-y-2">
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search verified snippets..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-black/40 border border-white/10 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-[#f04438]"
-          />
-        </div>
-
-        {/* Tab filters */}
-        <div className="flex items-center gap-1 text-[11px] font-mono">
+      <div className="flex shrink-0 gap-1 px-4 pt-3">
+        {tabs.map((t) => (
           <button
+            key={t.id}
             type="button"
-            onClick={() => setFilterType('all')}
-            className={`px-2 py-0.5 rounded-full transition-colors ${
-              filterType === 'all'
-                ? 'bg-white/15 text-white font-bold'
-                : 'text-zinc-500 hover:text-zinc-300'
+            onClick={() => setTab(t.id)}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors ${
+              tab === t.id ? 'bg-white/[0.08] text-white' : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
             }`}
           >
-            All ({citations.length + liveLogs.length + deployDiffs.length})
+            {t.label}
+            <span className="text-[11px] tabular-nums text-zinc-500">{t.n}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setFilterType('citations')}
-            className={`px-2 py-0.5 rounded-full transition-colors ${
-              filterType === 'citations'
-                ? 'bg-[#f04438]/20 text-[#f04438] font-bold border border-[#f04438]/30'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            Runbooks ({citations.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterType('logs')}
-            className={`px-2 py-0.5 rounded-full transition-colors ${
-              filterType === 'logs'
-                ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            Logs ({liveLogs.length})
-          </button>
-        </div>
+        ))}
       </div>
 
-      {/* Evidence List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
-        {/* Citations Section */}
-        {(filterType === 'all' || filterType === 'citations') && (
-          <div className="space-y-2">
-            <span className="text-[11px] uppercase font-medium text-zinc-500 tracking-[0.08em] block">
-              Grounded Runbook Citations ({filteredCitations.length})
+      <div key={tab} className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
+        {total === 0 && (
+          <div className="dash-fade flex flex-col items-center gap-4 pt-16 text-center">
+            <span className="relative flex h-3 w-3">
+              <span className="dash-ping absolute inline-flex h-full w-full rounded-full bg-[#ff6b4a]" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-[#ff6b4a]" />
             </span>
-
-            {filteredCitations.map((c, i) => (
-              <div
-                key={i}
-                className="p-3 rounded-xl bg-[#14141a] border border-white/5 hover:border-white/15 transition-all space-y-1.5"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <FileText className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
-                    <span className="font-semibold text-zinc-200 truncate text-[11.5px]">{c.title}</span>
-                  </div>
-                  {c.sourceUrl && (
-                    <a
-                      href={c.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-zinc-400 hover:text-white p-1 hover:bg-white/10 rounded transition-colors"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-                </div>
-
-                <div className="text-[10px] font-mono text-zinc-500 truncate">
-                  ID: {c.sourceId}
-                </div>
-
-                <blockquote className="bg-black/40 p-2 rounded text-[11px] font-mono text-zinc-300 leading-relaxed border-l-2 border-[#f04438]">
-                  "{c.snippet}"
-                </blockquote>
-              </div>
-            ))}
+            <div>
+              <p className="text-[13.5px] text-zinc-300">Listening for evidence</p>
+              <p className="mt-1 text-[12.5px] text-zinc-600">Runbooks, logs and deploys show up as Vigil finds them.</p>
+            </div>
           </div>
         )}
 
-        {/* Live Logs Section */}
-        {(filterType === 'all' || filterType === 'logs') && filteredLogs.length > 0 && (
-          <div className="space-y-2 pt-2 border-t border-white/5">
-            <span className="text-[11px] uppercase font-medium text-zinc-500 tracking-[0.08em] block">
-              Live Tail Log Evidence ({filteredLogs.length})
-            </span>
-
-            {filteredLogs.map((log, i) => (
-              <div
-                key={i}
-                className="p-2.5 rounded-xl bg-black/50 border border-white/5 font-mono text-[11px] space-y-1"
-              >
-                <div className="flex items-center justify-between text-[10px] text-zinc-500">
-                  <span>{log.timestamp}</span>
-                  <span
-                    className={`px-1 rounded font-bold ${
-                      log.level === 'ERROR'
-                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                        : 'bg-amber-500/20 text-amber-400'
-                    }`}
-                  >
-                    {log.level}
-                  </span>
-                </div>
-                <div className="text-zinc-200 break-all leading-tight">
-                  {log.message}
-                </div>
-                {log.traceId && (
-                  <div className="text-[10px] text-zinc-500 truncate">
-                    trace: {log.traceId}
+        {show('sources') && citations.length > 0 && (
+          <section>
+            <Heading count={citations.length}>Sources</Heading>
+            <div className="space-y-2">
+              {citations.map((c, i) => {
+                const id = `s-${c.sourceId}`;
+                const expanded = open === id;
+                return (
+                  <div key={id} role="button" tabIndex={0} onClick={() => toggle(id)} onKeyDown={(e) => e.key === 'Enter' && toggle(id)} className={row} style={rowStyle(i)}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate text-[13px] font-medium text-zinc-100">{c.title}</span>
+                      {c.sourceUrl && (
+                        <a
+                          href={c.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="Open source"
+                          className="shrink-0 rounded p-1 text-zinc-600 transition-colors hover:bg-white/[0.08] hover:text-white"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                    <p className={`mt-1.5 border-l-2 border-[#ff6b4a]/50 pl-2.5 text-[12.5px] leading-relaxed text-zinc-400 ${expanded ? '' : 'line-clamp-2'}`}>
+                      {c.snippet}
+                    </p>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          </section>
         )}
 
-        {/* Deploy Diffs Section */}
-        {(filterType === 'all' || filterType === 'deploys') && deployDiffs.length > 0 && (
-          <div className="space-y-2 pt-2 border-t border-white/5">
-            <span className="text-[11px] uppercase font-medium text-zinc-500 tracking-[0.08em] block">
-              Deploy Commits & Diffs ({deployDiffs.length})
-            </span>
+        {show('logs') && liveLogs.length > 0 && (
+          <section>
+            <Heading count={liveLogs.length}>Logs</Heading>
+            <div className="space-y-2">
+              {liveLogs.map((l, i) => {
+                const id = `l-${i}`;
+                const expanded = open === id;
+                return (
+                  <div key={id} role="button" tabIndex={0} onClick={() => toggle(id)} onKeyDown={(e) => e.key === 'Enter' && toggle(id)} className={`${row} overflow-hidden pl-4`} style={rowStyle(i)}>
+                    <span className={`absolute inset-y-0 left-0 w-[3px] ${LEVEL[l.level].bar}`} />
+                    <div className="flex items-center justify-between text-[11.5px]">
+                      <span className="text-zinc-500">{l.timestamp}</span>
+                      <span className={`font-medium ${LEVEL[l.level].text}`}>{l.level}</span>
+                    </div>
+                    <p className={`mt-1 text-[12.5px] leading-relaxed text-zinc-200 ${expanded ? '' : 'line-clamp-2'}`}>{l.message}</p>
+                    {expanded && l.traceId && (
+                      <div className="dash-rise mt-2 flex items-center justify-between rounded-lg bg-black/30 px-2.5 py-1.5">
+                        <span className="font-mono-only truncate text-[11px] text-zinc-500">{l.traceId}</span>
+                        <CopyButton value={l.traceId} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
-            {deployDiffs.map((d, i) => (
-              <div
-                key={i}
-                className="p-2.5 rounded-xl bg-[#14141a] border border-white/5 font-mono text-[11px] space-y-1"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[#f04438] font-bold">sha: {d.commit}</span>
-                  <span className="text-zinc-500 text-[10px]">@{d.author}</span>
-                </div>
-                <p className="text-zinc-300 font-sans text-xs">{d.message}</p>
-                <span className="text-[10px] text-emerald-400 block">{d.diffStat}</span>
-              </div>
-            ))}
-          </div>
+        {show('deploys') && deployDiffs.length > 0 && (
+          <section>
+            <Heading count={deployDiffs.length}>Deploys</Heading>
+            <div className="space-y-2">
+              {deployDiffs.map((d, i) => {
+                const [added, removed] = [d.diffStat.match(/\+(\d+)/)?.[1], d.diffStat.match(/-(\d+)/)?.[1]];
+                return (
+                  <div key={d.commit} className={row} style={rowStyle(i)}>
+                    <p className="text-[13px] leading-relaxed text-zinc-100">{d.message}</p>
+                    <div className="mt-2 flex items-center justify-between text-[12px] text-zinc-500">
+                      <span className="flex items-center gap-1">
+                        <span className="font-mono-only rounded bg-white/[0.06] px-1.5 py-0.5 text-zinc-300">{d.commit}</span>
+                        <CopyButton value={d.commit} />
+                        <span>· {d.author}</span>
+                      </span>
+                      <span className="font-mono-only tabular-nums">
+                        {added && <span className="text-emerald-400">+{added}</span>}
+                        {removed && <span className="ml-1.5 text-rose-400">−{removed}</span>}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         )}
       </div>
     </aside>

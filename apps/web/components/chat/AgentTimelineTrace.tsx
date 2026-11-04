@@ -50,15 +50,15 @@ export const AgentTimelineTrace: React.FC<AgentTimelineTraceProps> = ({
           <div className="relative flex items-center justify-center">
             {isRunning ? (
               <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f04438] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#f04438]"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#e07a67] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#e07a67]"></span>
               </span>
             ) : (
               <Activity className="w-3.5 h-3.5 text-zinc-400 group-hover:scale-110 transition-transform" />
             )}
           </div>
           <span className="text-xs font-medium text-zinc-300">
-            {isRunning ? 'Agent executing operations...' : 'Reasoning & Execution Trace'}
+            {isRunning ? 'Working…' : 'Show steps'}
           </span>
           <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-white/[0.06] text-zinc-400 border border-white/5">
             {timeline.length} {timeline.length === 1 ? 'step' : 'steps'}
@@ -89,7 +89,7 @@ export const AgentTimelineTrace: React.FC<AgentTimelineTraceProps> = ({
                   {/* Highlight tool names or parameter tokens */}
                   {step.split(/(tools:[^,\n]+|service=[^\s,)]+|intent=[^\s,)]+|true|false)/gi).map((part, pIdx) => {
                     if (part.startsWith('service=') || part.startsWith('intent=')) {
-                      return <span key={pIdx} className="text-[#f04438] font-semibold">{part}</span>;
+                      return <span key={pIdx} className="text-[#e07a67] font-semibold">{part}</span>;
                     }
                     if (part.startsWith('tools:')) {
                       return <span key={pIdx} className="text-amber-400 font-semibold">{part}</span>;
@@ -108,7 +108,7 @@ export const AgentTimelineTrace: React.FC<AgentTimelineTraceProps> = ({
 
             {isRunning && (
               <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono italic pl-7 pt-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#f04438] animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#e07a67] animate-pulse"></span>
                 Synthesizing tool outputs and verifying safety constraints...
               </div>
             )}

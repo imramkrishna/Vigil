@@ -451,17 +451,17 @@ body {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.2;
-  color: #fff;
+  color: #ffc9bd;
   border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(180deg, #f5513f 0%, #e03a2c 100%);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 6px 16px -8px rgba(240, 68, 56, 0.7);
+  border: 1px solid rgba(255, 140, 118, 0.28);
+  background: rgba(255, 107, 74, 0.13);
   cursor: pointer;
-  transition: filter 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
-.dash-btn-primary:hover { filter: brightness(1.08); }
+.dash-btn-primary:hover { background: rgba(255, 107, 74, 0.2); border-color: rgba(255, 140, 118, 0.42); color: #ffe0d8; }
 .dash-btn-primary:active { transform: translateY(1px); }
 .dash-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.dash-btn-primary:disabled:hover { background: rgba(255, 107, 74, 0.13); }
 
 .dash-btn-ghost {
   display: inline-flex;
@@ -495,4 +495,19 @@ textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid rgba(255, 107, 74, 0.55);
   outline-offset: 2px;
+}
+
+/* ───────────── Motion ───────────── */
+@keyframes dash-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dash-pop { from { opacity: 0; transform: translateY(8px) scale(0.975); } to { opacity: 1; transform: none; } }
+@keyframes dash-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes dash-slide { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes dash-ping { 0% { transform: scale(1); opacity: 0.6; } 80%, 100% { transform: scale(2.4); opacity: 0; } }
+.dash-fade { animation: dash-fade 0.18s ease-out both; }
+.dash-pop { animation: dash-pop 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.dash-rise { animation: dash-rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.dash-slide { animation: dash-slide 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.dash-ping { animation: dash-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .dash-fade, .dash-pop, .dash-rise, .dash-slide, .dash-ping { animation: none; }
 }

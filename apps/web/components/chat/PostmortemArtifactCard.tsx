@@ -92,8 +92,8 @@ export const PostmortemArtifactCard: React.FC<PostmortemArtifactCardProps> = ({
       }
       if (trimmed.startsWith('## ')) {
         return (
-          <h2 key={idx} className="text-sm font-semibold text-[#f04438] mt-3.5 mb-1.5 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#f04438]"></span>
+          <h2 key={idx} className="text-sm font-semibold text-[#e07a67] mt-3.5 mb-1.5 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#e07a67]"></span>
             {trimmed.slice(3)}
           </h2>
         );
@@ -114,7 +114,7 @@ export const PostmortemArtifactCard: React.FC<PostmortemArtifactCardProps> = ({
       }
       if (trimmed.startsWith('> ')) {
         return (
-          <blockquote key={idx} className="border-l-2 border-[#f04438] pl-3 py-1 my-2 bg-white/[0.02] text-xs text-zinc-300 italic">
+          <blockquote key={idx} className="border-l-2 border-[#e07a67] pl-3 py-1 my-2 bg-white/[0.02] text-xs text-zinc-300 italic">
             {trimmed.slice(2)}
           </blockquote>
         );
@@ -135,12 +135,12 @@ export const PostmortemArtifactCard: React.FC<PostmortemArtifactCardProps> = ({
       {/* Top Banner */}
       <div className="p-4 bg-gradient-to-r from-[#17171d] via-[#1a1a24] to-[#17171d] border-b border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#f04438]/15 border border-[#f04438]/30 flex items-center justify-center text-[#f04438]">
+          <div className="w-8 h-8 rounded-lg bg-[#e07a67]/15 border border-[#e07a67]/30 flex items-center justify-center text-[#e07a67]">
             <FileText className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-[#f04438] font-bold">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#e07a67] font-bold">
                 Generated Artifact
               </span>
               <span className="text-[11px] font-mono text-zinc-500 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
@@ -280,7 +280,7 @@ export const PostmortemArtifactCard: React.FC<PostmortemArtifactCardProps> = ({
                         </td>
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/5 border border-white/5 text-[11px] font-mono text-zinc-300">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#f04438]"></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#e07a67]"></span>
                             @{item.owner}
                           </span>
                         </td>

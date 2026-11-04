@@ -2,25 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import {
-  Flame,
-  Plus,
-  Copy,
-  Check,
-  Server,
-  BookOpen,
-  ArrowRight,
-  Shield,
-  Zap,
-  Activity,
-  Layers,
-  Terminal,
-  ExternalLink,
-  MessageSquare,
-  Sparkles,
-  Bot,
-  User,
-} from 'lucide-react';
+import { Plus, Copy, Check, Server, BookOpen, ArrowRight } from 'lucide-react';
 import type {
   ChatTurn,
   Mode,
@@ -421,21 +403,21 @@ gcloud run services update-traffic checkout-api \\
   // Quick Starter Prompts matching screenshot style
   const starterPrompts = [
     {
-      title: 'Checkout-API 502s Anomaly',
+      title: 'Why is checkout-api returning 502s?',
       query: 'Why is checkout-api returning 502s after the latest deploy? Check commit diffs and live logs.',
       mode: 'incident' as Mode,
       badge: 'Active Incident',
       sev: 'SEV-1' as Severity,
     },
     {
-      title: 'Payment Runbook Rollback Procedure',
+      title: 'How do I roll back payments?',
       query: 'What is the exact rollback procedure and command in our payment service runbook?',
       mode: 'ask' as Mode,
       badge: 'Runbook RAG',
       sev: 'SEV-2' as Severity,
     },
     {
-      title: 'Draft Postmortem Report',
+      title: 'Draft a postmortem for the last incident',
       query: 'Draft a blameless postmortem for INC-2026-8841 with timeline, root cause, and action items.',
       mode: 'postmortem' as Mode,
       badge: 'Artifact Gen',
@@ -499,7 +481,7 @@ gcloud run services update-traffic checkout-api \\
               <BookOpen className="w-3.5 h-3.5 text-zinc-400" />
               <span className="hidden sm:inline">Evidence</span>
               {allCitations.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-[#f04438] text-white text-[10px] font-mono font-bold">
+                <span className="px-1.5 py-0.2 rounded-full bg-[#e07a67] text-white text-[10px] font-mono font-bold">
                   {allCitations.length}
                 </span>
               )}
@@ -537,22 +519,22 @@ gcloud run services update-traffic checkout-api \\
             <div className="max-w-2xl mx-auto pt-8 md:pt-16 pb-6 text-center space-y-6 animate-in fade-in duration-300">
               {/* Official Vigil Logo & Greeting */}
               <div className="flex flex-col items-center justify-center gap-3 mb-2">
-                <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center shadow-[0_0_25px_rgba(240,68,56,0.25)]">
-                  <Image src="/vigil.svg" alt="Vigil" width={28} height={28} className="w-7 h-7 object-contain" />
+                <div className="w-12 h-12 flex items-center justify-center">
+                  <Image src="/vigil.svg" alt="Vigil" width={36} height={36} className="w-9 h-9 object-contain" />
                 </div>
                 <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-white">
                   What are we investigating?
                 </h2>
               </div>
 
-              <p className="text-sm md:text-base text-zinc-400 max-w-lg mx-auto leading-relaxed">
-                Autonomous engineering operations copilot for live cloud telemetry, root-cause hypothesis ranking, and human-in-the-loop action execution.
+              <p className="text-sm text-zinc-500 max-w-md mx-auto">
+                Ask about runbooks, deploys and live logs, or start an investigation.
               </p>
 
               {/* Operational Quick-Start Cards */}
               <div className="grid grid-cols-1 gap-3 text-left pt-4">
                 <span className="text-[11px] uppercase tracking-[0.08em] text-zinc-500 font-medium px-1">
-                  Quick Diagnostic Starters
+                  Try asking
                 </span>
                 {starterPrompts.map((p, idx) => (
                   <button
@@ -563,21 +545,18 @@ gcloud run services update-traffic checkout-api \\
                       setSeverity(p.sev);
                       handleUserPromptSubmit(p.query);
                     }}
-                    className="p-3.5 rounded-2xl border border-white/[0.08] bg-[#121217]/80 hover:bg-[#181820] hover:border-white/20 transition-all group flex items-center justify-between text-left shadow-sm hover:shadow-md"
+                    className="px-4 py-3 rounded-xl border border-white/[0.07] hover:bg-white/[0.04] transition-colors group flex items-center justify-between text-left"
                   >
                     <div className="space-y-1 min-w-0 pr-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-zinc-200 group-hover:text-white">
+                        <span className="text-[13.5px] text-zinc-200 group-hover:text-white">
                           {p.title}
                         </span>
-                        <span className="text-[10.5px] font-medium px-2 py-0.5 rounded-full bg-white/[0.04] text-zinc-400 border border-white/[0.06]">
-                          {p.badge}
-                        </span>
                       </div>
-                      <p className="text-xs text-zinc-400 line-clamp-1">{p.query}</p>
+                      
                     </div>
 
-                    <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-zinc-400 group-hover:text-white group-hover:bg-[#f04438] transition-all flex-shrink-0">
+                    <div className="text-zinc-600 group-hover:text-white transition-colors flex-shrink-0">
                       <ArrowRight className="w-3.5 h-3.5" />
                     </div>
                   </button>
@@ -598,7 +577,7 @@ gcloud run services update-traffic checkout-api \\
                     }`}
                   >
                     {!isUser && (
-                      <div className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center flex-shrink-0 mt-1">
+                      <div className="w-7 h-7 flex items-center justify-center flex-shrink-0 mt-1">
                         <Image src="/vigil.svg" alt="Vigil" width={16} height={16} className="w-4 h-4 object-contain" />
                       </div>
                     )}
@@ -606,18 +585,10 @@ gcloud run services update-traffic checkout-api \\
                     <div
                       className={`max-w-[90%] md:max-w-[85%] rounded-2xl transition-all ${
                         isUser
-                          ? 'bg-[#1e1e26] border border-white/10 p-3.5 text-zinc-100 shadow-sm'
-                          : 'bg-[#121217]/95 border border-white/[0.08] p-4 text-zinc-200 shadow-md backdrop-blur-md'
+                          ? 'bg-white/[0.06] px-4 py-2.5 text-zinc-100'
+                          : 'bg-transparent p-1 text-zinc-200'
                       }`}
                     >
-                      {/* Message Meta */}
-                      <div className="flex items-center justify-between gap-2 pb-1.5 mb-2 border-b border-white/[0.04] text-[11px] font-mono text-zinc-500">
-                        <span className="font-semibold text-zinc-400">
-                          {isUser ? 'Operator' : 'Vigil Copilot'}
-                        </span>
-                        <span>{turn.createdAt}</span>
-                      </div>
-
                       {/* Content Prose */}
                       <div className="text-xs md:text-sm leading-relaxed space-y-2 whitespace-pre-wrap">
                         {turn.content}
@@ -659,24 +630,15 @@ gcloud run services update-traffic checkout-api \\
                         />
                       )}
                     </div>
-
-                    {isUser && (
-                      <div className="w-7 h-7 rounded-lg bg-[#272732] border border-white/10 flex items-center justify-center text-zinc-300 flex-shrink-0 mt-1">
-                        <User className="w-4 h-4" />
-                      </div>
-                    )}
                   </div>
                 );
               })}
 
               {isGenerating && (
                 <div className="flex gap-3 md:gap-4 items-start animate-in fade-in">
-                  <div className="w-7 h-7 rounded-lg bg-[#f04438] flex items-center justify-center text-white flex-shrink-0 animate-pulse">
-                    <Activity className="w-4 h-4" />
-                  </div>
-                  <div className="p-4 rounded-2xl bg-[#121217] border border-white/10 text-xs font-mono text-zinc-400 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#f04438] animate-ping" />
-                    <span>Analyzing telemetry, diffing recent deploys, and searching runbooks...</span>
+                  <div className="py-2 text-[13px] text-zinc-500 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-pulse" />
+                    <span>Working on it…</span>
                   </div>
                 </div>
               )}
@@ -704,35 +666,7 @@ gcloud run services update-traffic checkout-api \\
         isOpen={isEvidenceOpen}
         onClose={() => setIsEvidenceOpen(false)}
         citations={allCitations}
-        liveLogs={[
-          {
-            timestamp: '04:12:01 UTC',
-            level: 'ERROR',
-            message: 'Connection pool exhausted: 20/20 active leases, 412 queued callers timed out',
-            traceId: '4a9f81bc-0e12-4d2b-98f1-394f71a098c2',
-          },
-          {
-            timestamp: '04:11:45 UTC',
-            level: 'WARN',
-            message: 'P99 Latency on /v1/charge crossed SLA threshold: 2420ms (> 800ms)',
-            traceId: '98fa21cb-4412-1102-12aa-001239840192',
-          },
-        ]}
-        deployDiffs={[
-          {
-            commit: '9b8f2c3',
-            author: 'alex.dev',
-            message: 'feat: restrict PgBouncer pool sizing for container isolation',
-            diffStat: '+12 -4 lines (database.config.ts)',
-          },
-          {
-            commit: '8f2a1b',
-            author: 'sarah.sre',
-            message: 'chore: bump base node image & configure gcloud healthcheck',
-            diffStat: '+4 -2 lines (Dockerfile)',
-          },
-        ]}
-      />
+              />
 
       {/* Service & Live Log Configuration Modal */}
       <ServicePlatformModal
