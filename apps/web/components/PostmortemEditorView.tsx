@@ -54,14 +54,14 @@ export function PostmortemEditorView() {
           </div>
           <button
             onClick={() => setPublished(true)}
-            className="keycap-download-btn !px-4 !py-2 !text-[13px]"
+            className="dash-btn-primary !px-4 !py-2 !text-[13px]"
           >
             {published ? "Published" : "Publish"}
           </button>
         </div>
       </div>
 
-      <div className="command-launcher-glass p-6">
+      <div className="dash-card p-6">
         {mode === "edit" ? (
           <textarea
             value={text}

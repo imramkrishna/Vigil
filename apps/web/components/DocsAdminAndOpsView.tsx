@@ -44,7 +44,7 @@ export function DocsAdminAndOpsView() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {STATS.map((s) => (
-          <div key={s.label} className="command-launcher-glass p-5">
+          <div key={s.label} className="dash-card p-5">
             <div className="text-[12px] text-[#9c9c9d]">{s.label}</div>
             <div className="mt-1 text-[26px] font-semibold">{s.value}</div>
             <div className="text-[12px] text-[#9c9c9d]">{s.hint}</div>
@@ -53,7 +53,7 @@ export function DocsAdminAndOpsView() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <form onSubmit={add} className="command-launcher-glass p-6 lg:col-span-2">
+        <form onSubmit={add} className="dash-card p-6 lg:col-span-2">
           <h3 className="text-[16px] font-semibold">Add a runbook</h3>
           <p className="mt-1 text-[13px] text-[#9c9c9d]">
             Paste a runbook or postmortem so Vigil can cite it.
@@ -67,12 +67,12 @@ export function DocsAdminAndOpsView() {
           </label>
           <textarea id="rb-body" rows={6} value={content} onChange={(e) => setContent(e.target.value)} placeholder="Paste markdown here…" className={field} />
           {notice && <p className="mt-3 text-[12.5px] text-[#ffb347]">{notice}</p>}
-          <button type="submit" className="keycap-download-btn mt-4 w-full !py-2.5 !text-[13px]">
+          <button type="submit" className="dash-btn-primary mt-4 w-full !py-2.5 !text-[13px]">
             Add runbook
           </button>
         </form>
 
-        <div className="command-launcher-glass p-6 lg:col-span-3">
+        <div className="dash-card p-6 lg:col-span-3">
           <h3 className="text-[16px] font-semibold">Your runbooks ({docs.length})</h3>
           <ul className="mt-4 divide-y divide-white/[0.06]">
             {docs.map((d) => (

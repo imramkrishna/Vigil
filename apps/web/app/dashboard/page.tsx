@@ -24,7 +24,7 @@ interface NavItem {
 }
 
 const ico = (d: string) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-[17px] w-[17px] shrink-0" aria-hidden="true">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0" aria-hidden="true">
     <path d={d} />
   </svg>
 );
@@ -95,24 +95,21 @@ function NavButton({
     <button
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13.5px] font-medium transition-colors ${
+      className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-[7px] text-left text-[13px] font-medium transition-colors ${
         active
-          ? "bg-white/[0.07] text-white"
-          : "text-[#9c9c9d] hover:bg-white/[0.04] hover:text-white"
+          ? "bg-white/[0.06] text-white"
+          : "text-[#8f9093] hover:bg-white/[0.03] hover:text-white"
       }`}
     >
-      {active && (
-        <span className="absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r bg-gradient-to-b from-[#ffb347] to-[#ff2f3a]" />
-      )}
-      <span className={active ? "text-[#ff6b4a]" : ""}>{item.icon}</span>
+      <span className={active ? "text-[#ff6b4a]" : "text-[#6f7074] group-hover:text-[#b4b4b6]"}>{item.icon}</span>
       <span className="flex-1">{item.label}</span>
       {item.badge && (
-        <span className="rounded-full bg-[#ff2f3a]/25 px-1.5 text-[11px] font-medium text-[#ffb347]">
+        <span className="rounded-md bg-white/[0.07] px-1.5 py-px text-[11px] font-medium tabular-nums text-[#c9c9cb]">
           {item.badge}
         </span>
       )}
       {item.dot && (
-        <span className="h-1.5 w-1.5 rounded-full bg-[#ff4d4d] shadow-[0_0_8px_#ff4d4d]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a4a]" />
       )}
     </button>
   );
@@ -120,7 +117,7 @@ function NavButton({
 
 function DashboardContent() {
   const params = useSearchParams();
-  const [tab, setTab] = useState<TabId>("incident");
+  const [tab, setTab] = useState<TabId>("ask");
   const [showNew, setShowNew] = useState(false);
   const [title, setTitle] = useState("");
   const [severity, setSeverity] = useState("SEV-2");
@@ -145,32 +142,34 @@ function DashboardContent() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#0a0b0d] text-white lg:flex-row">
       {/* Sidebar (desktop) */}
-      <aside className="hidden h-full w-[248px] shrink-0 flex-col border-r border-white/[0.07] bg-[#08090b] px-3 py-4 lg:flex">
+      <aside className="hidden h-full w-[248px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0a0b0d] px-3 py-4 lg:flex">
         <Link href="/" className="flex items-center gap-2.5 px-3 py-1.5">
           <Image src="/vigil.svg" alt="Vigil" width={24} height={24} className="h-6 w-6 object-contain" />
           <span className="text-[16px] font-semibold tracking-[-0.02em]">Vigil</span>
         </Link>
 
-        <div className="mt-5 flex items-center gap-2.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
+        <div className="mt-5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-white/[0.04] transition-colors">
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[#ffb347] to-[#ff2f3a] text-[11px] font-semibold text-[#07080a]">
             A
           </span>
           <div className="min-w-0 leading-tight">
             <div className="truncate text-[13px] font-medium">Acme Payments</div>
-            <div className="text-[11px] text-[#9c9c9d]">Free workspace</div>
+            <div className="text-[11px] text-[#77787b]">Free workspace</div>
           </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6f7074]"><path d="M7 15l5 5 5-5M7 9l5-5 5 5" /></svg>
         </div>
 
         <button
           onClick={() => setShowNew(true)}
-          className="keycap-download-btn mt-4 w-full !py-2 !text-[13px]"
+          className="dash-btn-primary mt-3 w-full"
         >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-3.5 w-3.5"><path d="M12 5v14M5 12h14" /></svg>
           New incident
         </button>
 
-        <nav aria-label="Dashboard" className="mt-6 flex-1 space-y-6 overflow-y-auto">
+        <nav aria-label="Dashboard" className="mt-7 flex-1 space-y-7 overflow-y-auto">
           <div>
-            <div className="px-3 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-[#9c9c9d]/70">
+            <div className="dash-eyebrow px-3 pb-2">
               Workspace
             </div>
             <div className="space-y-0.5">
@@ -180,7 +179,7 @@ function DashboardContent() {
             </div>
           </div>
           <div>
-            <div className="px-3 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-[#9c9c9d]/70">
+            <div className="dash-eyebrow px-3 pb-2">
               Library
             </div>
             <div className="space-y-0.5">
@@ -190,7 +189,7 @@ function DashboardContent() {
             </div>
           </div>
           <div>
-            <div className="px-3 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-[#9c9c9d]/70">
+            <div className="dash-eyebrow px-3 pb-2">
               Account
             </div>
             <div className="space-y-0.5">
@@ -199,7 +198,7 @@ function DashboardContent() {
           </div>
         </nav>
 
-        <div className="flex items-center gap-3 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
+        <div className="flex items-center gap-3 rounded-lg border-t border-white/[0.06] px-2.5 pt-3">
           <button
             onClick={() => setTab("settings")}
             aria-label="Open settings"
@@ -210,7 +209,7 @@ function DashboardContent() {
             </span>
             <div className="min-w-0 leading-tight">
               <div className="truncate text-[13px] font-medium">Alex Chen</div>
-              <div className="text-[11px] text-[#9c9c9d]">Pro plan</div>
+              <div className="text-[11px] text-[#77787b]">Pro plan</div>
             </div>
           </button>
           <Link href="/login" aria-label="Log out" className="text-[#9c9c9d] hover:text-white">
@@ -223,7 +222,7 @@ function DashboardContent() {
 
       {/* Main */}
       <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[280px] bg-[radial-gradient(ellipse_60%_100%_at_50%_0%,rgba(255,107,74,0.12),transparent)]" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[240px] bg-[radial-gradient(ellipse_50%_100%_at_50%_0%,rgba(255,107,74,0.05),transparent)]" />
 
         {/* Mobile top bar */}
         <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#08090b]/90 backdrop-blur-xl lg:hidden">
@@ -232,7 +231,7 @@ function DashboardContent() {
               <Image src="/vigil.svg" alt="Vigil" width={22} height={22} className="h-[22px] w-[22px] object-contain" />
               <span className="text-[15px] font-semibold">Vigil</span>
             </Link>
-            <button onClick={() => setShowNew(true)} className="keycap-download-btn !px-3 !py-1.5 !text-[12.5px]">
+            <button onClick={() => setShowNew(true)} className="dash-btn-primary !px-3 !py-1.5 !text-[12.5px]">
               New incident
             </button>
           </div>
@@ -251,33 +250,38 @@ function DashboardContent() {
           </div>
         </header>
 
-        <main className="relative z-10 mx-auto max-w-[1100px] px-4 py-8 sm:px-8 lg:py-10">
-          <div className="mb-8">
-            <h1 className="text-[26px] font-semibold tracking-[-0.025em]">{current.title}</h1>
-            <p className="mt-1 text-[14px] text-[#9c9c9d]">{current.description}</p>
+        {tab === "ask" ? (
+          <div className="relative z-10 h-[calc(100vh-88px)] lg:h-screen w-full overflow-hidden">
+            <AskCopilotView />
           </div>
-
-          {banner && (
-            <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-[#ffb347]/30 bg-[#ff2f3a]/10 px-4 py-3 text-[13px] text-[#ffb347]">
-              <span>{banner}</span>
-              <button onClick={() => setBanner(null)} aria-label="Dismiss" className="text-white/70 hover:text-white">
-                ✕
-              </button>
+        ) : (
+          <main className="relative z-10 mx-auto max-w-[1100px] px-4 py-8 sm:px-8 lg:py-10">
+            <div className="mb-7 border-b border-white/[0.06] pb-6">
+              <h1 className="text-[22px] font-semibold tracking-[-0.02em]">{current.title}</h1>
+              <p className="mt-1 text-[13.5px] text-[#8f9093]">{current.description}</p>
             </div>
-          )}
 
-          {tab === "incident" && <IncidentRoomView onNavigateApproval={() => setTab("approvals")} />}
-          {tab === "ask" && <AskCopilotView />}
-          {tab === "approvals" && <ApprovalsInboxView currentRole="lead" />}
-          {tab === "postmortem" && <PostmortemEditorView />}
-          {tab === "ops" && <DocsAdminAndOpsView />}
-          {tab === "settings" && <SettingsView />}
-        </main>
+            {banner && (
+              <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-[#ffb347]/30 bg-[#ff2f3a]/10 px-4 py-3 text-[13px] text-[#ffb347]">
+                <span>{banner}</span>
+                <button onClick={() => setBanner(null)} aria-label="Dismiss" className="text-white/70 hover:text-white">
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {tab === "incident" && <IncidentRoomView onNavigateApproval={() => setTab("approvals")} />}
+            {tab === "approvals" && <ApprovalsInboxView currentRole="lead" />}
+            {tab === "postmortem" && <PostmortemEditorView />}
+            {tab === "ops" && <DocsAdminAndOpsView />}
+            {tab === "settings" && <SettingsView />}
+          </main>
+        )}
       </div>
 
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <form onSubmit={create} className="command-launcher-glass w-full max-w-[440px] p-6">
+          <form onSubmit={create} className="dash-card w-full max-w-[440px] p-6 shadow-2xl">
             <h3 className="text-[18px] font-semibold">New incident</h3>
             <label htmlFor="inc-title" className="mt-4 block text-[13px] font-medium">
               What&apos;s happening?
@@ -305,10 +309,10 @@ function DashboardContent() {
               <option>SEV-3</option>
             </select>
             <div className="mt-6 flex justify-end gap-2.5">
-              <button type="button" onClick={() => setShowNew(false)} className="rounded-lg border border-white/15 px-4 py-2 text-[13px] text-[#9c9c9d] hover:text-white">
+              <button type="button" onClick={() => setShowNew(false)} className="dash-btn-ghost">
                 Cancel
               </button>
-              <button type="submit" className="keycap-download-btn !px-5 !py-2 !text-[13px]">
+              <button type="submit" className="dash-btn-primary !px-5 !py-2 !text-[13px]">
                 Create
               </button>
             </div>

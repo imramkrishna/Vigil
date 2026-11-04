@@ -427,3 +427,72 @@ body {
 .glass-btn:active {
   transform: translateY(1px);
 }
+
+/* ───────────── Dashboard design system ─────────────
+   Flat, hairline-bordered surfaces; one accent (coral) used sparingly. */
+.dash-card {
+  background: #0d0e11;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px -16px rgba(0, 0, 0, 0.8);
+}
+
+.dash-row-active {
+  background: rgba(255, 107, 74, 0.07);
+  border-color: rgba(255, 107, 74, 0.45) !important;
+}
+
+.dash-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #fff;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, #f5513f 0%, #e03a2c 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 6px 16px -8px rgba(240, 68, 56, 0.7);
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.dash-btn-primary:hover { filter: brightness(1.08); }
+.dash-btn-primary:active { transform: translateY(1px); }
+.dash-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.dash-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #b4b4b6;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.dash-btn-ghost:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.dash-btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.dash-eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #77787b;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(255, 107, 74, 0.55);
+  outline-offset: 2px;
+}

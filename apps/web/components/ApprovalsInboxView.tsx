@@ -63,15 +63,15 @@ export function ApprovalsInboxView({
 
   const badge = (s: Approval["status"]) =>
     s === "pending"
-      ? "border-[#ffb347]/40 bg-[#ffb347]/15 text-[#ffb347]"
+      ? "border-amber-400/25 bg-amber-400/10 text-amber-300"
       : s === "approved"
-        ? "border-white/20 bg-white/10 text-white"
-        : "border-[#ff2f3a]/40 bg-[#ff2f3a]/15 text-[#ff6b4a]";
+        ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
+        : "border-[#ff5a4a]/30 bg-[#ff5a4a]/10 text-[#ff8a78]";
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
       <div className="space-y-3 lg:col-span-2">
-        <h2 className="text-[15px] font-semibold">
+        <h2 className="dash-eyebrow">
           {items.filter((i) => i.status === "pending").length} waiting for you
         </h2>
         {items.map((i) => (
@@ -80,13 +80,13 @@ export function ApprovalsInboxView({
             onClick={() => setSelectedId(i.id)}
             className={`w-full rounded-xl border p-4 text-left transition-colors ${
               i.id === selected.id
-                ? "launcher-row-active border-[#ff6b4a]/50"
-                : "border-white/10 bg-[#0b0c0f]/80 hover:border-white/20"
+                ? "dash-row-active"
+                : "border-white/[0.07] bg-[#0d0e11] hover:border-white/15"
             }`}
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-[12px] text-[#9c9c9d]">{i.target}</span>
-              <span className={`rounded-full border px-2.5 py-0.5 text-[11px] capitalize ${badge(i.status)}`}>
+              <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize ${badge(i.status)}`}>
                 {i.status}
               </span>
             </div>
@@ -95,19 +95,19 @@ export function ApprovalsInboxView({
         ))}
       </div>
 
-      <div className="command-launcher-glass p-6 lg:col-span-3">
-        <div className="text-[12px] text-[#9c9c9d]">{selected.target}</div>
+      <div className="dash-card p-6 lg:col-span-3">
+        <div className="dash-eyebrow">{selected.target}</div>
         <h3 className="mt-1 text-[20px] font-semibold tracking-[-0.02em]">{selected.title}</h3>
 
         <div className="mt-5">
-          <div className="text-[12px] text-[#9c9c9d]">Why Vigil suggests this</div>
+          <div className="dash-eyebrow">Why Vigil suggests this</div>
           <p className="mt-1 text-[14px] leading-relaxed">{selected.why}</p>
         </div>
 
-        <dl className="mt-5 divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#07080a]">
+        <dl className="mt-5 divide-y divide-white/[0.05] rounded-xl border border-white/[0.07] bg-black/25">
           {selected.details.map(([k, v]) => (
             <div key={k} className="flex justify-between gap-4 px-4 py-2.5 text-[13px]">
-              <dt className="text-[#9c9c9d]">{k}</dt>
+              <dt className="text-[#77787b]">{k}</dt>
               <dd className="text-right">{v}</dd>
             </div>
           ))}
@@ -121,14 +121,14 @@ export function ApprovalsInboxView({
           <button
             disabled={!canDecide}
             onClick={() => decide("rejected")}
-            className="rounded-lg border border-white/15 px-4 py-2 text-[13px] text-[#9c9c9d] hover:text-white disabled:opacity-40"
+            className="dash-btn-ghost"
           >
             Reject
           </button>
           <button
             disabled={!canDecide}
             onClick={() => decide("approved")}
-            className="keycap-download-btn !px-5 !py-2 !text-[13px] disabled:opacity-40"
+            className="dash-btn-primary"
           >
             Approve
           </button>

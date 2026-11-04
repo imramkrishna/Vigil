@@ -67,21 +67,21 @@ export function IncidentRoomView({
 
   return (
     <div className="space-y-6">
-      <div className="command-launcher-glass p-6">
+      <div className="dash-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-[12px] text-[#9c9c9d]">
-              <span className="rounded-full border border-[#ff4d4d]/40 bg-[#ff2f3a]/15 px-2.5 py-0.5 font-medium text-white">
+              <span className="rounded-md border border-[#ff5a4a]/30 bg-[#ff5a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#ff8a78]">
                 SEV-1
               </span>
               <span className="font-mono-only">INC-2048</span>
             </div>
-            <h2 className="mt-2 text-[22px] font-semibold tracking-[-0.02em]">
+            <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.02em]">
               Payments service is running out of database connections
             </h2>
           </div>
           {onNavigateApproval && (
-            <button onClick={onNavigateApproval} className="keycap-download-btn">
+            <button onClick={onNavigateApproval} className="dash-btn-primary">
               Review 2 approvals
             </button>
           )}
@@ -91,14 +91,19 @@ export function IncidentRoomView({
           {STEPS.map((s) => (
             <li
               key={s.label}
-              className={`rounded-lg border px-3 py-2 text-[13px] ${
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-[12.5px] ${
                 s.active
-                  ? "launcher-row-active border-[#ff6b4a]/50 text-white"
+                  ? "dash-row-active text-white"
                   : s.done
-                    ? "border-white/15 bg-white/[0.04] text-white"
-                    : "border-white/10 text-[#9c9c9d]"
+                    ? "border-white/[0.07] bg-white/[0.02] text-[#c9c9cb]"
+                    : "border-white/[0.06] text-[#6f7074]"
               }`}
             >
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  s.active ? "bg-[#ff6b4a]" : s.done ? "bg-emerald-400/80" : "bg-white/15"
+                }`}
+              />
               {s.label}
             </li>
           ))}
@@ -107,20 +112,20 @@ export function IncidentRoomView({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="space-y-4 lg:col-span-3">
-          <h3 className="text-[15px] font-semibold">Likely causes</h3>
+          <h3 className="dash-eyebrow">Likely causes</h3>
           {CAUSES.map((c, i) => (
-            <div key={c.title} className="command-launcher-glass p-5">
+            <div key={c.title} className="dash-card p-5">
               <div className="flex items-start justify-between gap-4">
                 <p className="text-[15px] font-medium">
                   {i + 1}. {c.title}
                 </p>
-                <span className="font-mono-only shrink-0 text-[13px]">
+                <span className="font-mono-only shrink-0 text-[13px] text-[#c9c9cb]">
                   {c.confidence}%
                 </span>
               </div>
-              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/[0.07]">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#ffb347] to-[#ff2f3a]"
+                  className="h-full rounded-full bg-gradient-to-r from-[#ff9a5a] to-[#f04438]"
                   style={{ width: `${c.confidence}%` }}
                 />
               </div>
@@ -131,10 +136,10 @@ export function IncidentRoomView({
                     <button
                       key={id}
                       onClick={() => setOpenEv(id)}
-                      className={`font-mono-only rounded px-2 py-0.5 text-[11px] ${
+                      className={`font-mono-only rounded-md px-2 py-0.5 text-[11px] transition-colors ${
                         openEv === id
-                          ? "bg-[#e6e6e6] text-[#2f3031]"
-                          : "border border-white/15 text-white hover:bg-white/10"
+                          ? "bg-white/[0.12] text-white"
+                          : "border border-white/10 text-[#9c9c9d] hover:text-white hover:bg-white/[0.06]"
                       }`}
                     >
                       {id}
@@ -146,15 +151,15 @@ export function IncidentRoomView({
             </div>
           ))}
 
-          <div className="command-launcher-glass p-5">
-            <div className="text-[12px] text-[#9c9c9d]">{EVIDENCE[openEv].source}</div>
+          <div className="dash-card p-5">
+            <div className="dash-eyebrow">{EVIDENCE[openEv].source}</div>
             <p className="mt-1 text-[14px] leading-relaxed">{EVIDENCE[openEv].text}</p>
           </div>
         </div>
 
         <div className="space-y-4 lg:col-span-2">
-          <div className="command-launcher-glass p-5">
-            <h3 className="text-[15px] font-semibold">Timeline</h3>
+          <div className="dash-card p-5">
+            <h3 className="dash-eyebrow">Timeline</h3>
             <ul className="mt-3 space-y-2.5">
               {timeline.map((t, i) => (
                 <li key={i} className="flex gap-3 text-[13px]">
@@ -169,9 +174,9 @@ export function IncidentRoomView({
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Add a note…"
                 aria-label="Add a note"
-                className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-[13px] caret-[#ff6b4a] outline-none placeholder:text-[#9c9c9d] focus:border-[#ff6b4a]"
+                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] caret-[#ff6b4a] outline-none placeholder:text-[#9c9c9d] focus:border-[#ff6b4a]"
               />
-              <button type="submit" className="keycap-download-btn !px-4 !py-2 !text-[13px]">
+              <button type="submit" className="dash-btn-ghost">
                 Add
               </button>
             </form>

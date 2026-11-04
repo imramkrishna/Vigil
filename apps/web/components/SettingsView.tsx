@@ -52,7 +52,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="command-launcher-glass p-6">
+    <section className="dash-card p-6">
       <h3 className="text-[16px] font-semibold">{title}</h3>
       {description && <p className="mt-1 text-[13px] text-[#9c9c9d]">{description}</p>}
       <div className="mt-5">{children}</div>
@@ -201,7 +201,7 @@ export function SettingsView() {
                   <input id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={field} />
                 </div>
                 <div className="sm:col-span-2">
-                  <button type="submit" className="keycap-download-btn !px-5 !py-2 !text-[13px]">Save changes</button>
+                  <button type="submit" className="dash-btn-primary !px-5 !py-2 !text-[13px]">Save changes</button>
                 </div>
               </form>
             </Card>
@@ -209,7 +209,7 @@ export function SettingsView() {
             <Card title="Workspace" description="Shown in the sidebar and in notifications.">
               <label htmlFor="s-ws" className="block text-[13px] font-medium">Workspace name</label>
               <input id="s-ws" value={workspace} onChange={(e) => setWorkspace(e.target.value)} className={field} />
-              <button onClick={() => flash("Workspace updated")} className="keycap-download-btn mt-4 !px-5 !py-2 !text-[13px]">
+              <button onClick={() => flash("Workspace updated")} className="dash-btn-primary mt-4 !px-5 !py-2 !text-[13px]">
                 Save
               </button>
             </Card>
@@ -253,7 +253,7 @@ export function SettingsView() {
                   placeholder="teammate@company.com"
                   className="min-w-0 flex-1 rounded-lg border border-white/15 bg-white/[0.04] px-3.5 py-2.5 text-[14px] caret-[#ff6b4a] outline-none placeholder:text-[#9c9c9d]/60 focus:border-[#ff6b4a]"
                 />
-                <button type="submit" className="keycap-download-btn !px-5 !py-2.5 !text-[13px]">Send invite</button>
+                <button type="submit" className="dash-btn-primary !px-5 !py-2.5 !text-[13px]">Send invite</button>
               </form>
             </Card>
 
@@ -316,7 +316,7 @@ export function SettingsView() {
                     <div
                       key={p.id}
                       className={`flex flex-col rounded-xl border p-4 ${
-                        active ? "launcher-row-active border-[#ff6b4a]/50" : "border-white/10 bg-white/[0.02]"
+                        active ? "dash-row-active border-[#ff6b4a]/50" : "border-white/10 bg-white/[0.02]"
                       }`}
                     >
                       <div className="text-[14px] font-semibold">{p.name}</div>
@@ -379,7 +379,7 @@ export function SettingsView() {
                     <input id="c-cvc" inputMode="numeric" required value={newCard.cvc} onChange={(e) => setNewCard({ ...newCard, cvc: e.target.value })} placeholder="123" className={field} />
                   </div>
                   <div className="col-span-2 flex gap-2.5">
-                    <button type="submit" className="keycap-download-btn !px-5 !py-2 !text-[13px]">Save card</button>
+                    <button type="submit" className="dash-btn-primary !px-5 !py-2 !text-[13px]">Save card</button>
                     <button type="button" onClick={() => setEditingCard(false)} className="rounded-lg border border-white/15 px-4 py-2 text-[13px] text-[#9c9c9d] hover:text-white">
                       Cancel
                     </button>
