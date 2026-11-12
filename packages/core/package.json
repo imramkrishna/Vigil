@@ -18,6 +18,7 @@
     "langchain": "^1.6.0",
     "pdf-parse": "^2.4.5",
     "pg": "^8.23.1",
+    "save-dev": "0.0.1-security",
     "zod": "^4.6.7"
   },
   "devDependencies": {
