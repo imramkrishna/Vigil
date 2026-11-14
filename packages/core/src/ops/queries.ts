@@ -1,8 +1,10 @@
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 import {
+  account,
   actionLog,
   approvals,
   incidents,
+  members,
   opsDeploys,
   opsPastIncidents,
   opsServices,
@@ -14,6 +16,25 @@ import {
   type ProposedAction,
   type Severity,
 } from "../db";
+
+export async function getOrgGitHubToken(orgId: string): Promise<string | undefined> {
+  try {
+    return await withOrgContext(orgId, async (tx) => {
+      const [row] = await tx
+        .select({ accessToken: account.accessToken })
+        .from(account)
+        .innerJoin(members, eq(members.userId, account.userId))
+        .where(
+          and(eq(members.orgId, orgId), eq(account.providerId, "github"))
+        )
+        .limit(1);
+
+      return row?.accessToken ?? undefined;
+    });
+  } catch {
+    return undefined;
+  }
+}
 
 export async function getServiceByName(orgId: string, serviceName: string) {
   return withOrgContext(orgId, async (tx) => {
