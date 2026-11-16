@@ -17,6 +17,7 @@ export interface AuthUser {
   orgId: string;
   orgName: string;
   role: "viewer" | "responder" | "lead" | "admin";
+  githubConnected?: boolean;
 }
 
 export interface DocumentRow {
@@ -104,6 +105,58 @@ export async function signUpEmail(name: string, email: string, password: string)
     method: "POST",
     body: JSON.stringify({ name, email, password }),
   });
+}
+
+export async function signInWithGitHub(callbackURL?: string) {
+  const redirectTarget =
+    callbackURL ||
+    (typeof window !== "undefined"
+      ? `${window.location.origin}/dashboard`
+      : "http://localhost:3000/dashboard");
+
+  const res = await apiFetch<{ url?: string; redirect?: boolean }>(
+    "/api/auth/sign-in/social",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "github",
+        callbackURL: redirectTarget,
+      }),
+    }
+  );
+
+  if (res?.url && typeof window !== "undefined") {
+    window.location.href = res.url;
+  }
+  return res;
+}
+
+export async function connectGitHubAccount(callbackURL?: string) {
+  const redirectTarget =
+    callbackURL ||
+    (typeof window !== "undefined"
+      ? `${window.location.origin}/dashboard`
+      : "http://localhost:3000/dashboard");
+
+  try {
+    const res = await apiFetch<{ url?: string; redirect?: boolean }>(
+      "/api/auth/link-social",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          provider: "github",
+          callbackURL: redirectTarget,
+        }),
+      }
+    );
+
+    if (res?.url && typeof window !== "undefined") {
+      window.location.href = res.url;
+    }
+    return res;
+  } catch {
+    return signInWithGitHub(redirectTarget);
+  }
 }
 
 export async function signOut() {
