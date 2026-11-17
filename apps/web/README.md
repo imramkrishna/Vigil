@@ -29,7 +29,8 @@ The web application provides a unified dark-mode operational workspace connectin
 - **Approvals Inbox (`ApprovalsInboxView.tsx`)** — Role-gated inbox for reviewing and deciding pending remediation actions (`GET /api/approvals` and `POST /api/approvals/:id/decide`).
 - **Runbooks & Usage (`DocsAdminAndOpsView.tsx`)** — Displays monthly LLM token spend against the organization budget (`GET /api/ops/budget`), lists indexed PDF runbooks (`GET /api/docs`), and supports uploading or deleting documents.
 - **Postmortems (`PostmortemEditorView.tsx`)** — Markdown preview and editor that triggers `POST /api/incidents/:id/postmortem` for any investigated incident.
-- **Authentication (`app/login/page.tsx` & `app/signup/page.tsx`)** — Better Auth email/password sign-in and workspace creation flows.
+- **Settings (`SettingsView.tsx`)** — Profile, workspace, team member roles, billing, and **GitHub Integration** (`Connect GitHub` / `Reconnect GitHub` via Better Auth OAuth so Octokit can access private repositories).
+- **Authentication (`app/login/page.tsx` & `app/signup/page.tsx`)** — Better Auth email/password sign-in, workspace creation, and one-click **Continue with GitHub** OAuth flows.
 
 ### 4. API Client (`lib/api.ts`)
 - Centralized, strongly-typed fetch client communicating with `@vigil/api` (`NEXT_PUBLIC_API_URL`, defaulting to `http://localhost:4000`) with session cookies enabled.

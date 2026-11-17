@@ -98,6 +98,8 @@ Every tool in `@vigil/graphs` is bound to the caller's authenticated `orgId` at 
 | **`packages/core`** | `@vigil/core` | Shared foundational library: Drizzle ORM schema and migrations, forced PostgreSQL RLS transaction wrappers (`withOrgContext`, `withUserContext`), OpenRouter model factory and cost ledger callbacks, hybrid retrieval queries, S3 & Firecrawl clients, GitHub commit fetcher, and multi-platform log adapters. |
 | **`packages/graphs`** | `@vigil/graphs` | Unified LangGraph workflow (`VigilState`), `PostgresSaver` checkpointer setup, system prompts, tenant-bound tool definitions, and modular graph nodes (`routeTask`, `agent`, `runTools`, `synthesizeAnswer`, `verifyGrounding`, `formHypotheses`, `awaitApproval`, `executeAction`, `draftPostmortem`). |
 | **`packages/shared`** | `@vigil/shared` | Shared TypeScript interfaces and constants across workspaces. |
+| **`specs/`** | Engineering Specs | Detailed architectural specifications for Octokit & GitHub OAuth (`01`), HITL Approvals & Action Execution (`02`), Multi-Platform Live Logs (`03`), and Incident Room/Approvals UI Synchronization (`04`). |
+| **`features/`** | Feature Docs | Feature overview for proactive and reactive GitHub commit, diff, and runbook ingestion. |
 
 ---
 
@@ -130,8 +132,8 @@ The Express server in `apps/api/src/` separates route definitions (`src/routes/`
 
 | Endpoint | Controller | Role Required | Description |
 | :--- | :--- | :--- | :--- |
-| **`ALL /api/auth/*`** | Better Auth Handler | Public | Handles email/password sign-up, sign-in, session management, and automatic org + budget provisioning. |
-| **`GET /api/me`** | `getMeController` | `viewer+` | Returns the authenticated user's profile, active `orgId`, `orgName`, and RBAC `role`. |
+| **`ALL /api/auth/*`** | Better Auth Handler | Public | Handles email/password sign-up and sign-in, GitHub OAuth social login and account linking (`/api/auth/sign-in/social`, `/api/auth/link-social`), session management, and automatic org + budget provisioning. |
+| **`GET /api/me`** | `getMeController` | `viewer+` | Returns the authenticated user's profile, active `orgId`, `orgName`, RBAC `role`, and `githubConnected` status. |
 | **`POST /api/docs/upload`** | `uploadDocController` | `responder+` | Validates PDF upload via Multer, deduplicates by SHA-256 hash, uploads to S3, saves a pending row, and enqueues BullMQ ingestion. |
 | **`GET /api/docs`** | `listDocsController` | `viewer+` | Lists all documents for the active organization with their public S3 URLs and indexing status. |
 | **`DELETE /api/docs/:id`** | `deleteDocController` | `lead+` | Deletes a document and cascades deletion to all associated vector chunks. |
@@ -192,5 +194,6 @@ Configure the following environment variables in `.env`:
 | **`BETTER_AUTH_SECRET` & `BETTER_AUTH_URL`** | Secret key and base URL (`http://localhost:4000`) for Better Auth session signing. |
 | **`S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET_NAME`** | AWS S3 credentials and bucket name for storing uploaded PDF runbooks. |
 | **`FIRECRAWL_API_KEY`** | API key for Firecrawl web search and scraping tools. |
-| **`GITHUB_TOKEN`** | Optional GitHub token for fetching commit history and file diffs from private repositories or with higher rate limits. |
+| **`GITHUB_TOKEN`** | Server fallback GitHub Personal Access Token used by Octokit (`createOctokit`) for public repository commits/diffs at 5,000 requests/hour when a workspace has not connected a GitHub OAuth account. |
+| **`GITHUB_CLIENT_ID` & `GITHUB_CLIENT_SECRET`** | GitHub OAuth App credentials used by Better Auth so registered users can sign in with or link their GitHub account for private repository access. |
 | **`NEXT_PUBLIC_API_URL`** | Frontend base URL pointing to the Express API server (`http://localhost:4000`). |
