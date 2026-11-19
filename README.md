@@ -98,8 +98,7 @@ Every tool in `@vigil/graphs` is bound to the caller's authenticated `orgId` at 
 | **`packages/core`** | `@vigil/core` | Shared foundational library: Drizzle ORM schema and migrations, forced PostgreSQL RLS transaction wrappers (`withOrgContext`, `withUserContext`), OpenRouter model factory and cost ledger callbacks, hybrid retrieval queries, S3 & Firecrawl clients, GitHub commit fetcher, and multi-platform log adapters. |
 | **`packages/graphs`** | `@vigil/graphs` | Unified LangGraph workflow (`VigilState`), `PostgresSaver` checkpointer setup, system prompts, tenant-bound tool definitions, and modular graph nodes (`routeTask`, `agent`, `runTools`, `synthesizeAnswer`, `verifyGrounding`, `formHypotheses`, `awaitApproval`, `executeAction`, `draftPostmortem`). |
 | **`packages/shared`** | `@vigil/shared` | Shared TypeScript interfaces and constants across workspaces. |
-| **`specs/`** | Engineering Specs | Detailed architectural specifications for Octokit & GitHub OAuth (`01`), HITL Approvals & Action Execution (`02`), Multi-Platform Live Logs (`03`), and Incident Room/Approvals UI Synchronization (`04`). |
-| **`features/`** | Feature Docs | Feature overview for proactive and reactive GitHub commit, diff, and runbook ingestion. |
+| **`specs/`** | Engineering Specs | Living repo review (`00`) and numbered design specifications (`01`–`11`) covering Octokit & GitHub OAuth, HITL Approvals, Live Logs, UI State Sync, GitHub Webhooks, Evaluation Harness, Security & Threat Model, Streaming, Feedback & Observability, Local Setup/Testing/CI, and the Integrations Roadmap. See [`specs/README.md`](./specs/README.md). |
 
 ---
 
@@ -155,9 +154,9 @@ The Express server in `apps/api/src/` separates route definitions (`src/routes/`
 
 All LLM and embedding invocations are managed in `packages/core/src/model-layer/`:
 
-1. **Two-Tier Model Routing (`getModel.ts`)** — `createTierModels` provisions a **Fast tier** (`openai/gpt-4o-mini` via OpenRouter) for tool calling, routing, and grounding checks, and a **Strong tier** (`anthropic/claude-3.5-sonnet` via OpenRouter) for answer synthesis, hypothesis ranking, and postmortem drafting.
-2. **Pre-Flight Budget Gate (`handleLLMStart`)** — Before every LLM call, `assertWithinBudget(orgId)` checks the organization's current monthly spend in `model_usage` against `tenant_budgets.monthly_limit_usd` (default $250/month) and halts execution if the cap is exceeded.
-3. **Automatic Cost Ledger (`handleLLMEnd`)** — A LangChain callback attached directly to each model instance extracts prompt and completion token counts after every call, calculates the USD cost from the pricing table, and inserts an audit row into `model_usage`.
+1. **Two-Tier Model Routing (`getModel.ts`)** — `createTierModels` provisions a **Fast tier** (`google/gemini-2.5-flash-lite` with fallback `qwen/qwen-2.5-coder-32b-instruct` via OpenRouter) for tool calling, routing, and grounding checks, and a **Strong tier** (`qwen/qwen-2.5-72b-instruct` with fallback `meta-llama/llama-3.3-70b-instruct` via OpenRouter) for answer synthesis, hypothesis ranking, and postmortem drafting.
+2. **Pre-Flight Budget Gate (`routeTask.ts`)** — Before running the graph, `assertWithinBudget(orgId)` checks the organization's current monthly spend in `model_usage` against `tenant_budgets.monthly_limit_usd` (default $250/month) and halts execution if the cap is exceeded.
+3. **Automatic Cost & Latency Ledger (`handleLLMStart` / `handleLLMEnd`)** — A LangChain callback attached directly to each model instance records start time, extracts prompt and completion token counts after every call, calculates the USD cost from the pricing table, and inserts an audit row into `model_usage`.
 
 ---
 

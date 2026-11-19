@@ -1,5 +1,7 @@
 # Spec 01: Multi-Tenant Octokit & GitHub OAuth Integration
 
+**Status:** Implemented (known gaps — see Section 5 and [Spec 00](./00-repo-review-and-known-issues.md))
+
 ## 1. Overview
 
 Vigil inspects recent GitHub commits, file-level diff patches, and repository runbooks during incident investigations and service deploy lookups. Because Vigil is a multi-tenant workspace where different engineering teams register their own services and repositories, GitHub API access must support both **public repositories** out of the box and **private repositories** belonging to any registered user.
@@ -48,3 +50,42 @@ flowchart TD
 3. **Frontend Entry Points (`apps/web`)**
    - **Login & Signup Pages (`app/login/page.tsx`, `app/signup/page.tsx`)** — Provide a **Continue with GitHub** button calling `signInWithGitHub()` (`/api/auth/sign-in/social`).
    - **Workspace Settings (`components/SettingsView.tsx`)** — Displays a **GitHub Integration** card showing `Connected` or `Not connected` status and a **Connect GitHub** / **Reconnect GitHub** button calling `connectGitHubAccount()` (`/api/auth/link-social`).
+
+---
+
+## 5. Known Gaps (from [Spec 00](./00-repo-review-and-known-issues.md))
+
+The core integration works, but three issues stop this spec from being fully done:
+
+| Gap | Issue | Planned fix |
+| :--- | :--- | :--- |
+| **Token selection is random and ignores roles.** `getOrgGitHubToken` returns any member's token, so a `viewer`'s token can be used for writes. | Issue 3 | Separate read and write token rules: [Spec 07, section 4](./07-security-and-threat-model.md). |
+| **Errors are hidden.** Every Octokit call returns an empty result on failure, so an expired or revoked token looks like "no commits". | Issue 5 | Return a typed result that separates *empty*, *unauthorized*, *rate-limited* and *not found*. Show "Reconnect GitHub" in Settings when the token is rejected, and add a note to the agent timeline when GitHub evidence couldn't be loaded. |
+| **Too many calls, no caching.** Up to 33 GitHub requests per deploy lookup. | Issue 6 | Redis cache plus webhook ingestion: [Spec 05](./05-github-webhooks-and-proactive-ingestion.md). |
+
+Also note: `githubConnected` in `GET /api/me` only checks that a token **exists**, not that it still **works**. Once error types are added, store the last known token status and return it instead.
+
+---
+
+## 6. Non-goals
+- GitHub Enterprise Server (self-hosted) URLs. Only `github.com` is supported for now.
+- Pasting a token per service. Considered earlier, but dropped in favor of OAuth now and a GitHub App later ([Spec 11](./11-integrations-roadmap.md)).
+- GitLab and Bitbucket.
+
+## 7. Failure Cases
+
+| Failure | Current behavior | Target behavior |
+| :--- | :--- | :--- |
+| Repo URL can't be parsed | Returns no commits | Same, but the Add Service modal rejects invalid URLs before saving. |
+| Private repo with no connected token | Returns no commits (GitHub returns 404) | Timeline note: "Repository not accessible. Connect GitHub in Settings." |
+| Token revoked or expired | Returns no commits | Connection marked broken, Settings shows "Reconnect GitHub". |
+| Rate limit reached | Returns no commits | Serve cached data if available, otherwise a timeline note with the reset time. |
+
+## 8. Acceptance Criteria
+- [x] `createOctokit` uses the given token or falls back to `GITHUB_TOKEN`.
+- [x] Commits and per-file diffs are fetched with `listCommits` and `getCommit`.
+- [x] Users can sign in with GitHub and link GitHub from Settings.
+- [x] `GET /api/me` returns `githubConnected`.
+- [ ] Token selection follows the role rules in Spec 07 (tested).
+- [ ] An invalid token shows up as "Reconnect GitHub" in Settings instead of silently returning no data.
+- [ ] Repeated deploy lookups within 60 seconds hit the cache instead of GitHub.
