@@ -429,84 +429,185 @@ body {
 }
 
 /* ───────────── Dashboard design system ─────────────
-   Flat, hairline-bordered surfaces; one accent (coral) used sparingly. */
+   Calm, high-contrast neutral dark surfaces inspired by Claude & ChatGPT. */
+.dash-surface {
+  background: #17181b;
+  color: #ececef;
+}
+
 .dash-card {
-  background: #0d0e11;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: #1d1f24;
+  border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 14px;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px -16px rgba(0, 0, 0, 0.8);
 }
 
 .dash-row-active {
-  background: rgba(255, 107, 74, 0.07);
-  border-color: rgba(255, 107, 74, 0.45) !important;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18) !important;
 }
 
 .dash-btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 9px 16px;
+  gap: 7px;
+  padding: 8px 15px;
   font-size: 13px;
   font-weight: 500;
-  line-height: 1.2;
-  color: #ffc9bd;
+  line-height: 1.25;
+  color: #141518;
   border-radius: 9px;
-  border: 1px solid rgba(255, 140, 118, 0.28);
-  background: rgba(255, 107, 74, 0.13);
+  border: 1px solid transparent;
+  background: #f2f2f4;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  transition: background-color 0.15s ease, opacity 0.15s ease, transform 0.12s ease;
 }
-.dash-btn-primary:hover { background: rgba(255, 107, 74, 0.2); border-color: rgba(255, 140, 118, 0.42); color: #ffe0d8; }
-.dash-btn-primary:active { transform: translateY(1px); }
-.dash-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-.dash-btn-primary:disabled:hover { background: rgba(255, 107, 74, 0.13); }
+.dash-btn-primary:hover {
+  background: #ffffff;
+}
+.dash-btn-primary:active {
+  transform: translateY(0.5px);
+}
+.dash-btn-primary:disabled {
+  opacity: 0.36;
+  cursor: not-allowed;
+}
+.dash-btn-primary:disabled:hover {
+  background: #f2f2f4;
+}
+
+.dash-btn-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 15px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: #ffffff;
+  border-radius: 9px;
+  border: 1px solid rgba(229, 107, 78, 0.45);
+  background: #e56b4e;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease, transform 0.12s ease;
+}
+.dash-btn-accent:hover {
+  background: #ef7b60;
+}
+.dash-btn-accent:active {
+  transform: translateY(0.5px);
+}
+.dash-btn-accent:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 .dash-btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: 7px;
+  padding: 7.5px 13px;
   font-size: 13px;
-  color: #b4b4b6;
+  font-weight: 500;
+  line-height: 1.25;
+  color: #b8bac2;
   border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: transparent;
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
 }
-.dash-btn-ghost:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
-.dash-btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+.dash-btn-ghost:hover {
+  color: #f2f2f4;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.dash-btn-ghost:disabled {
+  opacity: 0.36;
+  cursor: not-allowed;
+}
+
+.dash-input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #141519;
+  padding: 9px 13px;
+  font-size: 13.5px;
+  color: #ececef;
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.dash-input::placeholder {
+  color: #6b6e78;
+}
+.dash-input:hover {
+  border-color: rgba(255, 255, 255, 0.17);
+}
+.dash-input:focus,
+.dash-input:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: #16181d;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+
+/* Chat composer textarea: focus ring is handled cleanly by its parent container */
+.dash-composer-input:focus,
+.dash-composer-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
 
 .dash-eyebrow {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #77787b;
+  letter-spacing: 0.02em;
+  color: #82858f;
 }
 
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  outline: 2px solid rgba(255, 107, 74, 0.55);
-  outline-offset: 2px;
+/* Subtle dark scrollbars inside dashboard panels */
+.dash-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+.dash-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.dash-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dash-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.13);
+  border-radius: 9999px;
+}
+.dash-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* Keep keyboard focus indicators in @layer base so Tailwind utilities (outline-none) always win */
+@layer base {
+  button:focus-visible,
+  a:focus-visible,
+  select:focus-visible {
+    outline: 2px solid rgba(229, 107, 78, 0.55);
+    outline-offset: 2px;
+  }
 }
 
 /* ───────────── Motion ───────────── */
 @keyframes dash-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes dash-pop { from { opacity: 0; transform: translateY(8px) scale(0.975); } to { opacity: 1; transform: none; } }
-@keyframes dash-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@keyframes dash-slide { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
-@keyframes dash-ping { 0% { transform: scale(1); opacity: 0.6; } 80%, 100% { transform: scale(2.4); opacity: 0; } }
-.dash-fade { animation: dash-fade 0.18s ease-out both; }
-.dash-pop { animation: dash-pop 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.dash-rise { animation: dash-rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.dash-slide { animation: dash-slide 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes dash-pop { from { opacity: 0; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes dash-rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes dash-slide { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes dash-ping { 0% { transform: scale(1); opacity: 0.55; } 80%, 100% { transform: scale(2.2); opacity: 0; } }
+.dash-fade { animation: dash-fade 0.16s ease-out both; }
+.dash-pop { animation: dash-pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.dash-rise { animation: dash-rise 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.dash-slide { animation: dash-slide 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .dash-ping { animation: dash-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
 @media (prefers-reduced-motion: reduce) {
   .dash-fade, .dash-pop, .dash-rise, .dash-slide, .dash-ping { animation: none; }

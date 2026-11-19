@@ -1,19 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
-import {
-  FileText,
-  Copy,
-  Check,
-  CheckCircle2,
-  Calendar,
-  AlertTriangle,
-  Flame,
-  ListTodo,
-  ExternalLink,
-  Download,
-} from 'lucide-react';
-import type { ActionItem } from '../../types/vigil';
+import React, { useState } from "react";
+import { FileText, Copy, Check, Download } from "lucide-react";
+import type { ActionItem } from "../../types/vigil";
+import { MarkdownProse } from "./MarkdownProse";
 
 interface PostmortemArtifactCardProps {
   postmortemMarkdown?: string;
@@ -24,25 +14,27 @@ interface PostmortemArtifactCardProps {
 }
 
 export const PostmortemArtifactCard: React.FC<PostmortemArtifactCardProps> = ({
-  postmortemMarkdown = '',
+  postmortemMarkdown = "",
   actionItems = [],
-  title = 'Incident Postmortem Report',
-  incidentId = 'INC-2026-8841',
+  title = "Postmortem report",
+  incidentId = "INC-2026-8841",
 }) => {
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'preview' | 'actions' | 'raw'>('preview');
+  const [activeTab, setActiveTab] = useState<"preview" | "actions" | "raw">("preview");
   const [completedItems, setCompletedItems] = useState<Record<number, boolean>>({});
 
   const handleCopyMarkdown = () => {
     navigator.clipboard.writeText(postmortemMarkdown);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 1800);
   };
 
   const handleDownloadMarkdown = () => {
-    const blob = new Blob([postmortemMarkdown], { type: 'text/markdown;charset=utf-8' });
+    const blob = new Blob([postmortemMarkdown], {
+      type: "text/markdown;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
     link.download = `postmortem-${incidentId.toLowerCase()}.md`;
     link.click();
@@ -53,248 +45,144 @@ export const PostmortemArtifactCard: React.FC<PostmortemArtifactCardProps> = ({
     setCompletedItems((prev) => ({ ...prev, [idx]: !prev[idx] }));
   };
 
-  const getPriorityBadge = (priority: ActionItem['priority']) => {
-    switch (priority) {
-      case 'P0':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
-            <Flame className="w-3 h-3 text-rose-400" />
-            P0 Blocker
-          </span>
-        );
-      case 'P1':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
-            <AlertTriangle className="w-3 h-3 text-zinc-400" />
-            P1 High
-          </span>
-        );
-      case 'P2':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30">
-            P2 Normal
-          </span>
-        );
-    }
-  };
-
-  // Simple clean markdown parser for sections
-  const renderFormattedMarkdown = (content: string) => {
-    const lines = content.split('\n');
-    return lines.map((line, idx) => {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('# ')) {
-        return (
-          <h1 key={idx} className="text-lg font-bold text-white mt-4 mb-2 pb-1 border-b border-white/10">
-            {trimmed.slice(2)}
-          </h1>
-        );
-      }
-      if (trimmed.startsWith('## ')) {
-        return (
-          <h2 key={idx} className="text-sm font-semibold text-[#e07a67] mt-3.5 mb-1.5 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#e07a67]"></span>
-            {trimmed.slice(3)}
-          </h2>
-        );
-      }
-      if (trimmed.startsWith('### ')) {
-        return (
-          <h3 key={idx} className="text-xs font-semibold text-zinc-200 mt-2.5 mb-1 uppercase tracking-wider font-mono">
-            {trimmed.slice(4)}
-          </h3>
-        );
-      }
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-        return (
-          <li key={idx} className="ml-4 list-disc text-xs text-zinc-300 leading-relaxed my-0.5">
-            {trimmed.slice(2)}
-          </li>
-        );
-      }
-      if (trimmed.startsWith('> ')) {
-        return (
-          <blockquote key={idx} className="border-l-2 border-[#e07a67] pl-3 py-1 my-2 bg-white/[0.02] text-xs text-zinc-300 italic">
-            {trimmed.slice(2)}
-          </blockquote>
-        );
-      }
-      if (!trimmed) {
-        return <div key={idx} className="h-2" />;
-      }
-      return (
-        <p key={idx} className="text-xs text-zinc-300 leading-relaxed my-1">
-          {line}
-        </p>
-      );
-    });
+  const priorityClass = (p: ActionItem["priority"]) => {
+    if (p === "P0") return "bg-rose-500/12 text-rose-300";
+    if (p === "P1") return "bg-amber-500/12 text-amber-300";
+    return "bg-white/[0.06] text-[#a7a9b2]";
   };
 
   return (
-    <div className="my-3.5 rounded-xl border border-white/10 bg-[#121216]/95 backdrop-blur-md overflow-hidden shadow-lg">
-      {/* Top Banner */}
-      <div className="p-4 bg-gradient-to-r from-[#17171d] via-[#1a1a24] to-[#17171d] border-b border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#e07a67]/15 border border-[#e07a67]/30 flex items-center justify-center text-[#e07a67]">
-            <FileText className="w-4 h-4" />
+    <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.08] bg-[#1d1f24]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-[#c9cbd3]">
+            <FileText className="h-4 w-4" aria-hidden="true" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-[#e07a67] font-bold">
-                Generated Artifact
-              </span>
-              <span className="text-[11px] font-mono text-zinc-500 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
-                {incidentId}
-              </span>
-            </div>
-            <h3 className="text-sm font-semibold text-white">{title}</h3>
+          <div className="min-w-0">
+            <h3 className="truncate text-[13.5px] font-medium text-[#ececef]">
+              {title}
+            </h3>
+            <span className="font-mono-only text-[11px] text-[#7c7e87]">
+              {incidentId}
+            </span>
           </div>
         </div>
 
-        {/* Tab Controls & Actions */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-black/40 p-0.5 rounded-lg border border-white/5 text-xs">
-            <button
-              type="button"
-              onClick={() => setActiveTab('preview')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                activeTab === 'preview'
-                  ? 'bg-white/10 text-white font-semibold shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Report Preview
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('actions')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1.5 ${
-                activeTab === 'actions'
-                  ? 'bg-white/10 text-white font-semibold shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <ListTodo className="w-3 h-3" />
-              Action Items ({actionItems.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('raw')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                activeTab === 'raw'
-                  ? 'bg-white/10 text-white font-semibold shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Raw MD
-            </button>
+          <div className="inline-flex rounded-lg bg-white/[0.04] p-0.5">
+            {(
+              [
+                { id: "preview", label: "Preview" },
+                { id: "actions", label: `Tasks (${actionItems.length})` },
+                { id: "raw", label: "Markdown" },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`cursor-pointer rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
+                  activeTab === t.id
+                    ? "bg-white/[0.1] text-[#ececef]"
+                    : "text-[#8a8c95] hover:text-[#d8dae0]"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
 
           <button
             type="button"
             onClick={handleCopyMarkdown}
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 transition-colors flex items-center gap-1 text-xs"
+            aria-label="Copy Markdown"
             title="Copy Markdown"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-[#94969e] transition-colors hover:bg-white/[0.06] hover:text-[#ececef]"
           >
             {copied ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-[11px] text-emerald-400">Copied</span>
-              </>
+              <Check className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
             ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Copy</span>
-              </>
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             )}
           </button>
 
           <button
             type="button"
             onClick={handleDownloadMarkdown}
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 transition-colors"
-            title="Download .md file"
+            aria-label="Download Markdown"
+            title="Download .md"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-[#94969e] transition-colors hover:bg-white/[0.06] hover:text-[#ececef]"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
       </div>
 
-      {/* Main Tab Content */}
       <div className="p-4">
-        {activeTab === 'preview' && (
-          <div className="space-y-1 bg-[#0b0b0e]/70 p-4 rounded-xl border border-white/5 max-h-96 overflow-y-auto">
-            {renderFormattedMarkdown(postmortemMarkdown)}
+        {activeTab === "preview" && (
+          <div className="dash-scroll max-h-[380px] overflow-y-auto pr-1">
+            <MarkdownProse content={postmortemMarkdown} compact />
           </div>
         )}
 
-        {activeTab === 'actions' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-zinc-400 pb-2 border-b border-white/5">
-              <span>Follow-up engineering tasks generated from root-cause analysis</span>
-              <span className="font-mono text-[11px]">
-                {Object.values(completedItems).filter(Boolean).length} / {actionItems.length} Resolved
+        {activeTab === "actions" && (
+          <div className="space-y-1">
+            <div className="mb-2 flex items-center justify-between text-[12px] text-[#7c7e87]">
+              <span>Follow-up tasks</span>
+              <span className="font-mono-only tabular-nums">
+                {Object.values(completedItems).filter(Boolean).length}/{actionItems.length} done
               </span>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-white/10 text-zinc-500 font-mono text-[10.5px] uppercase">
-                    <th className="py-2 px-3 w-8">Done</th>
-                    <th className="py-2 px-3">Priority</th>
-                    <th className="py-2 px-3">Action Item</th>
-                    <th className="py-2 px-3">Owner</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {actionItems.map((item, idx) => {
-                    const isDone = completedItems[idx];
-                    return (
-                      <tr
-                        key={idx}
-                        className={`hover:bg-white/[0.02] transition-colors ${
-                          isDone ? 'opacity-50' : ''
+            <ul className="divide-y divide-white/[0.05]">
+              {actionItems.map((item, idx) => {
+                const isDone = Boolean(completedItems[idx]);
+                return (
+                  <li
+                    key={idx}
+                    className={`flex items-start gap-3 py-2.5 transition-opacity ${
+                      isDone ? "opacity-50" : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleItem(idx)}
+                      aria-label={`Mark "${item.title}" ${isDone ? "incomplete" : "complete"}`}
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded border transition-colors ${
+                        isDone
+                          ? "border-emerald-500 bg-emerald-500 text-[#0d0e11]"
+                          : "border-white/20 bg-transparent hover:border-white/40"
+                      }`}
+                    >
+                      {isDone && <Check className="h-3 w-3 stroke-[3]" aria-hidden="true" />}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`text-[13px] leading-snug ${
+                          isDone ? "line-through text-[#7c7e87]" : "text-[#e2e3e8]"
                         }`}
                       >
-                        <td className="py-2.5 px-3">
-                          <button
-                            type="button"
-                            onClick={() => toggleItem(idx)}
-                            className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                              isDone
-                                ? 'bg-emerald-500 border-emerald-500 text-black'
-                                : 'border-white/20 hover:border-white/40 bg-black/30'
-                            }`}
-                          >
-                            {isDone && <Check className="w-3 h-3 stroke-[3]" />}
-                          </button>
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          {getPriorityBadge(item.priority)}
-                        </td>
-                        <td className="py-2.5 px-3 text-zinc-200">
-                          <span className={isDone ? 'line-through text-zinc-500' : 'font-medium'}>
-                            {item.title}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/5 border border-white/5 text-[11px] font-mono text-zinc-300">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#e07a67]"></span>
-                            @{item.owner}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        {item.title}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-[11.5px]">
+                        <span
+                          className={`font-mono-only rounded px-1.5 py-px text-[10.5px] font-medium ${priorityClass(item.priority)}`}
+                        >
+                          {item.priority}
+                        </span>
+                        <span className="font-mono-only text-[#7c7e87]">
+                          @{item.owner}
+                        </span>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
 
-        {activeTab === 'raw' && (
-          <pre className="p-3.5 bg-black/60 rounded-xl font-mono text-[11.5px] text-zinc-300 leading-relaxed overflow-x-auto max-h-96 border border-white/5">
+        {activeTab === "raw" && (
+          <pre className="dash-scroll max-h-[380px] overflow-auto rounded-lg bg-[#141519] p-3.5 font-mono-only text-[12px] leading-relaxed text-[#c9cbd3]">
             {postmortemMarkdown}
           </pre>
         )}

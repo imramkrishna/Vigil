@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { FileText, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import {
   deleteDoc,
   getBudget,
@@ -32,25 +33,45 @@ const FALLBACK_DOCS: DocumentRow[] = [
 export function DocsAdminAndOpsView() {
   const [docs, setDocs] = useState<DocumentRow[]>(FALLBACK_DOCS);
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
+  const [query, setQuery] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const loadData = async () => {
+    const [liveDocs, liveBudget] = await Promise.all([
+      listDocs().catch(() => null),
+      getBudget().catch(() => null),
+    ]);
+    if (liveDocs && liveDocs.length > 0) setDocs(liveDocs);
+    if (liveBudget) setBudget(liveBudget);
+  };
+
   const refresh = async () => {
+    setRefreshing(true);
     try {
-      const [liveDocs, liveBudget] = await Promise.all([
-        listDocs().catch(() => null),
-        getBudget().catch(() => null),
-      ]);
-      if (liveDocs && liveDocs.length > 0) setDocs(liveDocs);
-      if (liveBudget) setBudget(liveBudget);
+      await loadData();
     } catch {
       // Keep fallback data when offline
+    } finally {
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    refresh();
+    let active = true;
+    Promise.all([
+      listDocs().catch(() => null),
+      getBudget().catch(() => null),
+    ]).then(([liveDocs, liveBudget]) => {
+      if (!active) return;
+      if (liveDocs && liveDocs.length > 0) setDocs(liveDocs);
+      if (liveBudget) setBudget(liveBudget);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,7 +94,7 @@ export function DocsAdminAndOpsView() {
         },
         ...prev,
       ]);
-      setNotice(`Uploaded "${file.name}". Worker is indexing chunks in the background.`);
+      setNotice(`Uploaded "${file.name}". Indexing chunks in the background.`);
       setTimeout(refresh, 2500);
     } catch (err) {
       setNotice(
@@ -94,36 +115,97 @@ export function DocsAdminAndOpsView() {
   };
 
   const spent = budget ? `$${budget.spentUsd.toFixed(2)}` : "$0.00";
-  const limit = budget ? `of $${budget.limitUsd.toFixed(0)} budget` : "of $250 budget";
-  const pct = budget ? `${budget.percentUsed.toFixed(1)}%` : "0%";
+  const limit = budget ? `$${budget.limitUsd.toFixed(0)}` : "$250";
+  const pctNum = budget ? Math.min(100, Math.max(0, budget.percentUsed)) : 0;
+
+  const filteredDocs = docs.filter((d) =>
+    d.name.toLowerCase().includes(query.trim().toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="dash-card p-5">
-          <div className="text-[12px] text-[#9c9c9d]">Spend this month</div>
-          <div className="mt-1 text-[26px] font-semibold">{spent}</div>
-          <div className="text-[12px] text-[#9c9c9d]">{limit}</div>
+      {/* Compact Unified Usage Strip */}
+      <div className="dash-card grid grid-cols-1 divide-y divide-white/[0.06] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <div className="p-5">
+          <div className="text-[12px] text-[#8a8c95]">Monthly LLM spend</div>
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <span className="text-[22px] font-semibold tracking-[-0.02em] text-[#ececef] tabular-nums">
+              {spent}
+            </span>
+            <span className="text-[12.5px] text-[#7c7e87]">of {limit}</span>
+          </div>
         </div>
-        <div className="dash-card p-5">
-          <div className="text-[12px] text-[#9c9c9d]">Budget used</div>
-          <div className="mt-1 text-[26px] font-semibold">{pct}</div>
-          <div className="text-[12px] text-[#9c9c9d]">Monthly tenant cap</div>
+
+        <div className="p-5">
+          <div className="flex items-center justify-between text-[12px] text-[#8a8c95]">
+            <span>Budget utilization</span>
+            <span className="font-mono-only tabular-nums text-[#b5b7be]">
+              {pctNum.toFixed(1)}%
+            </span>
+          </div>
+          <div className="mt-3.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+            <div
+              className="h-full rounded-full bg-[#e56b4e] transition-all duration-300"
+              style={{ width: `${Math.max(pctNum, 2)}%` }}
+            />
+          </div>
+          <div className="mt-2 text-[11.5px] text-[#7c7e87]">
+            Organization monthly cap
+          </div>
         </div>
-        <div className="dash-card p-5">
-          <div className="text-[12px] text-[#9c9c9d]">Indexed runbooks</div>
-          <div className="mt-1 text-[26px] font-semibold">{docs.length}</div>
-          <div className="text-[12px] text-[#9c9c9d]">Hybrid vector + FTS</div>
+
+        <div className="p-5">
+          <div className="text-[12px] text-[#8a8c95]">Indexed runbooks</div>
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <span className="text-[22px] font-semibold tracking-[-0.02em] text-[#ececef] tabular-nums">
+              {docs.length}
+            </span>
+            <span className="text-[12.5px] text-[#7c7e87]">
+              Hybrid vector + FTS
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="dash-card flex flex-col justify-between p-6 lg:col-span-2">
-          <div>
-            <h3 className="text-[16px] font-semibold">Upload PDF runbook</h3>
-            <p className="mt-1 text-[13px] text-[#9c9c9d]">
-              Upload a PDF runbook, architecture doc, or postmortem. Vigil chunks and embeds it into pgvector via BullMQ.
-            </p>
+      {notice && (
+        <div
+          role="status"
+          className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-[13px] text-emerald-300"
+        >
+          {notice}
+        </div>
+      )}
+
+      {/* Unified Runbook Library */}
+      <div className="dash-card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4">
+          <div className="relative flex-1 min-w-[200px] max-w-[320px]">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6b6d76]"
+              aria-hidden="true"
+            />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter runbooks…"
+              aria-label="Filter runbooks"
+              className="dash-input !py-1.5 !pl-8 !text-[13px]"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={refreshing}
+              className="dash-btn-ghost"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+              <span>Refresh</span>
+            </button>
 
             <input
               ref={fileRef}
@@ -132,83 +214,70 @@ export function DocsAdminAndOpsView() {
               onChange={handleUpload}
               className="hidden"
             />
-
             <button
               type="button"
               disabled={uploading}
               onClick={() => fileRef.current?.click()}
-              className="mt-5 flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-4 py-8 text-center transition-colors hover:border-white/30 hover:bg-white/[0.04]"
+              className="dash-btn-primary"
             >
-              <span className="text-[13.5px] font-medium text-white">
-                {uploading ? "Uploading to S3…" : "Choose a .pdf file"}
-              </span>
-              <span className="text-[12px] text-[#77787b]">
-                Max 20 MB · PDF documents
-              </span>
+              <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{uploading ? "Uploading…" : "Upload PDF"}</span>
             </button>
-
-            {notice && (
-              <p className="mt-3 text-[12.5px] text-emerald-400">{notice}</p>
-            )}
           </div>
-
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => fileRef.current?.click()}
-            className="dash-btn-primary mt-5 w-full"
-          >
-            {uploading ? "Uploading…" : "Upload PDF runbook"}
-          </button>
         </div>
 
-        <div className="dash-card p-6 lg:col-span-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[16px] font-semibold">
-              Your runbooks ({docs.length})
-            </h3>
-            <button
-              type="button"
-              onClick={refresh}
-              className="text-[12px] text-[#8f9093] hover:text-white"
-            >
-              Refresh
-            </button>
+        {filteredDocs.length === 0 ? (
+          <div className="px-6 py-14 text-center">
+            <p className="text-[14px] font-medium text-[#d8dae0]">
+              {docs.length === 0 ? "No runbooks uploaded yet" : "No matching runbooks"}
+            </p>
+            <p className="mt-1 text-[13px] text-[#7c7e87]">
+              Upload PDF runbooks or postmortems (up to 20 MB) for grounded retrieval.
+            </p>
           </div>
-          <ul className="mt-4 divide-y divide-white/[0.06]">
-            {docs.map((d) => (
+        ) : (
+          <ul className="divide-y divide-white/[0.05]">
+            {filteredDocs.map((d) => (
               <li
                 key={d.id}
-                className="flex items-center justify-between gap-4 py-3"
+                className="group flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-white/[0.02]"
               >
-                <div className="min-w-0">
-                  <div className="truncate text-[14px] font-medium text-zinc-100">
-                    {d.name}
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-[#94969e]">
+                    <FileText className="h-4 w-4" aria-hidden="true" />
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-[#8f9093]">
-                    <span
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${
-                        d.status === "indexed"
-                          ? "bg-emerald-400"
-                          : d.status === "failed"
-                            ? "bg-rose-400"
-                            : "bg-amber-400"
-                      }`}
-                    />
-                    <span className="capitalize">{d.status}</span>
+                  <div className="min-w-0">
+                    <div className="truncate text-[13.5px] font-medium text-[#ececef]">
+                      {d.name}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-[12px] text-[#8a8c95]">
+                      <span
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${
+                          d.status === "indexed"
+                            ? "bg-emerald-400"
+                            : d.status === "failed"
+                              ? "bg-rose-400"
+                              : "bg-amber-400"
+                        }`}
+                      />
+                      <span className="capitalize">{d.status}</span>
+                    </div>
                   </div>
                 </div>
+
                 <button
                   type="button"
                   onClick={() => handleDelete(d.id)}
-                  className="text-[12px] text-zinc-500 transition-colors hover:text-rose-400"
+                  aria-label={`Delete ${d.name}`}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] text-[#7c7e87] transition-colors hover:bg-rose-500/10 hover:text-rose-300"
                 >
-                  Delete
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="hidden sm:inline">Delete</span>
                 </button>
               </li>
             ))}
           </ul>
-        </div>
+        )}
       </div>
     </div>
   );

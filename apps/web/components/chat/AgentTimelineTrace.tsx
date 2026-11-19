@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Activity, Terminal, CheckCircle2, Cpu, Search, ShieldCheck } from 'lucide-react';
+import React, { useState } from "react";
+import { ChevronRight, Terminal, Search, ShieldCheck, Cpu, Check } from "lucide-react";
 
 interface AgentTimelineTraceProps {
   timeline?: string[];
@@ -16,103 +16,91 @@ export const AgentTimelineTrace: React.FC<AgentTimelineTraceProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
-  if (!timeline || timeline.length === 0) {
-    if (!isRunning) return null;
+  if ((!timeline || timeline.length === 0) && !isRunning) {
+    return null;
   }
 
-  // Parse step category to render contextual icons
   const getStepIcon = (step: string) => {
     const s = step.toLowerCase();
-    if (s.includes('classif') || s.includes('intent')) {
-      return <Cpu className="w-3.5 h-3.5 text-zinc-400" />;
+    if (s.includes("classif") || s.includes("intent")) {
+      return <Cpu className="h-3.5 w-3.5 text-[#7c7e87]" aria-hidden="true" />;
     }
-    if (s.includes('tool') || s.includes('fetch') || s.includes('deploy') || s.includes('logs')) {
-      return <Terminal className="w-3.5 h-3.5 text-zinc-400" />;
+    if (s.includes("tool") || s.includes("fetch") || s.includes("deploy") || s.includes("logs")) {
+      return <Terminal className="h-3.5 w-3.5 text-[#7c7e87]" aria-hidden="true" />;
     }
-    if (s.includes('search') || s.includes('runbook') || s.includes('rag')) {
-      return <Search className="w-3.5 h-3.5 text-zinc-400" />;
+    if (s.includes("search") || s.includes("runbook") || s.includes("rag")) {
+      return <Search className="h-3.5 w-3.5 text-[#7c7e87]" aria-hidden="true" />;
     }
-    if (s.includes('ground') || s.includes('verif') || s.includes('valid')) {
-      return <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />;
+    if (s.includes("ground") || s.includes("verif") || s.includes("valid")) {
+      return <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80" aria-hidden="true" />;
     }
-    return <CheckCircle2 className="w-3.5 h-3.5 text-zinc-400" />;
+    return <Check className="h-3.5 w-3.5 text-[#7c7e87]" aria-hidden="true" />;
   };
 
   return (
-    <div className="my-2.5 rounded-xl border border-white/10 bg-[#121216]/90 backdrop-blur-md overflow-hidden transition-all shadow-sm">
-      {/* Header Bar */}
+    <div className="mb-3">
       <button
         type="button"
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors group"
+        onClick={() => setIsExpanded((v) => !v)}
+        aria-expanded={isExpanded}
+        className="group inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 -ml-2 text-[12.5px] font-medium text-[#8a8c95] transition-colors hover:bg-white/[0.04] hover:text-[#d8dae0]"
       >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative flex items-center justify-center">
-            {isRunning ? (
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#e07a67] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#e07a67]"></span>
-              </span>
-            ) : (
-              <Activity className="w-3.5 h-3.5 text-zinc-400 group-hover:scale-110 transition-transform" />
-            )}
-          </div>
-          <span className="text-xs font-medium text-zinc-300">
-            {isRunning ? 'Working…' : 'Show steps'}
-          </span>
-          <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-white/[0.06] text-zinc-400 border border-white/5">
-            {timeline.length} {timeline.length === 1 ? 'step' : 'steps'}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1.5 text-zinc-400 group-hover:text-zinc-200 text-xs">
-          <span className="text-[11px] text-zinc-500">{isExpanded ? 'Hide' : 'Inspect'}</span>
-          {isExpanded ? (
-            <ChevronDown className="w-4 h-4 transition-transform text-zinc-400" />
-          ) : (
-            <ChevronRight className="w-4 h-4 transition-transform text-zinc-400" />
-          )}
-        </div>
+        {isRunning && (
+          <span className="h-1.5 w-1.5 rounded-full bg-[#e56b4e] animate-pulse" aria-hidden="true" />
+        )}
+        <span>
+          {isRunning
+            ? "Investigating…"
+            : `Ran ${timeline.length} ${timeline.length === 1 ? "step" : "steps"}`}
+        </span>
+        <ChevronRight
+          className={`h-3.5 w-3.5 text-[#6b6d76] transition-transform duration-150 ${
+            isExpanded ? "rotate-90 text-[#94969e]" : ""
+          }`}
+          aria-hidden="true"
+        />
       </button>
 
-      {/* Expanded Step Log */}
       {isExpanded && (
-        <div className="px-3.5 pb-3 pt-1 border-t border-white/[0.06] bg-[#0c0c0e]/60">
-          <div className="space-y-2 mt-2">
+        <div className="dash-rise mt-1.5 ml-1.5 border-l border-white/[0.08] pl-3.5 py-1">
+          <ol className="space-y-2">
             {timeline.map((step, idx) => (
-              <div key={idx} className="flex items-start gap-2.5 text-xs group/item">
-                <div className="mt-0.5 flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-md bg-white/[0.04] border border-white/5">
-                  {getStepIcon(step)}
-                </div>
-                <div className="flex-1 min-w-0 font-mono text-[11.5px] leading-relaxed text-zinc-300 break-words bg-black/20 px-2 py-1.5 rounded-lg border border-white/[0.03]">
-                  <span className="text-zinc-600 select-none mr-2">[{idx + 1}]</span>
-                  {/* Highlight tool names or parameter tokens */}
-                  {step.split(/(tools:[^,\n]+|service=[^\s,)]+|intent=[^\s,)]+|true|false)/gi).map((part, pIdx) => {
-                    if (part.startsWith('service=') || part.startsWith('intent=')) {
-                      return <span key={pIdx} className="text-[#e07a67] font-semibold">{part}</span>;
-                    }
-                    if (part.startsWith('tools:')) {
-                      return <span key={pIdx} className="text-amber-400 font-semibold">{part}</span>;
-                    }
-                    if (part === 'true') {
-                      return <span key={pIdx} className="text-emerald-400 font-semibold">{part}</span>;
-                    }
-                    if (part === 'false') {
-                      return <span key={pIdx} className="text-rose-400 font-semibold">{part}</span>;
-                    }
-                    return <span key={pIdx}>{part}</span>;
-                  })}
-                </div>
-              </div>
+              <li
+                key={idx}
+                className="flex items-start gap-2.5 text-[12.5px] leading-relaxed text-[#9b9ca3]"
+              >
+                <span className="mt-0.5 shrink-0">{getStepIcon(step)}</span>
+                <span className="min-w-0 break-words">
+                  {step
+                    .split(/(tools:[^,\n]+|service=[^\s,)]+|intent=[^\s,)]+)/gi)
+                    .map((part, pIdx) => {
+                      if (
+                        part.startsWith("service=") ||
+                        part.startsWith("intent=") ||
+                        part.startsWith("tools:")
+                      ) {
+                        return (
+                          <code
+                            key={pIdx}
+                            className="font-mono-only rounded bg-white/[0.05] px-1 py-px text-[11.5px] text-[#dcdde3]"
+                          >
+                            {part}
+                          </code>
+                        );
+                      }
+                      return <span key={pIdx}>{part}</span>;
+                    })}
+                </span>
+              </li>
             ))}
+          </ol>
 
-            {isRunning && (
-              <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono italic pl-7 pt-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#e07a67] animate-pulse"></span>
-                Synthesizing tool outputs and verifying safety constraints...
-              </div>
-            )}
-          </div>
+          {isRunning && (
+            <div className="mt-2 flex items-center gap-2 text-[12px] text-[#7c7e87]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#e56b4e] animate-pulse" />
+              <span>Synthesizing tool outputs…</span>
+            </div>
+          )}
         </div>
       )}
     </div>

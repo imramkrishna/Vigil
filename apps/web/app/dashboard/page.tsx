@@ -1,11 +1,32 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { IncidentRoomView, type LiveIncidentData } from "@/components/IncidentRoomView";
+import {
+  AlertCircle,
+  BookOpen,
+  CheckCircle2,
+  FileText,
+  History,
+  LogOut,
+  Menu,
+  MessageSquare,
+  PanelLeft,
+  PanelLeftClose,
+  Plus,
+  Settings,
+  SquarePen,
+  Trash2,
+  X,
+} from "lucide-react";
+import {
+  IncidentRoomView,
+  type LiveIncidentData,
+} from "@/components/IncidentRoomView";
 import { AskCopilotView } from "@/components/AskCopilotView";
+import { ChatHistoryView } from "@/components/ChatHistoryView";
 import { ApprovalsInboxView } from "@/components/ApprovalsInboxView";
 import { PostmortemEditorView } from "@/components/PostmortemEditorView";
 import { DocsAdminAndOpsView } from "@/components/DocsAdminAndOpsView";
@@ -17,142 +38,221 @@ import {
   signOut,
   type AuthUser,
 } from "@/lib/api";
-import type { Severity } from "@/types/vigil";
+import {
+  clearChatThreads,
+  deleteChatThread,
+  renameChatThread,
+  upsertChatThread,
+  useChatHistory,
+  type ChatThread,
+} from "@/lib/chatHistory";
+import type { ChatTurn, Mode, Severity } from "@/types/vigil";
 
-type TabId = "incident" | "ask" | "approvals" | "postmortem" | "ops" | "settings";
+type TabId =
+  | "ask"
+  | "history"
+  | "incident"
+  | "approvals"
+  | "postmortem"
+  | "ops"
+  | "settings";
 
 interface NavItem {
   id: TabId;
   label: string;
   title: string;
-  description: string;
-  badge?: string;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   dot?: boolean;
-  icon: React.ReactNode;
 }
 
-const ico = (d: string) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0" aria-hidden="true">
-    <path d={d} />
-  </svg>
-);
-
-const WORKSPACE: NavItem[] = [
+const NAV_ITEMS: NavItem[] = [
+  {
+    id: "history",
+    label: "Chat history",
+    title: "Chat history",
+    icon: History,
+  },
   {
     id: "incident",
     label: "Incidents",
-    title: "Incident room",
-    description: "Live investigation for your active incident.",
+    title: "Incidents",
+    icon: AlertCircle,
     dot: true,
-    icon: ico("M12 9v4m0 4h.01M10.3 3.9L2.4 17.5A2 2 0 004.1 20.5h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"),
-  },
-  {
-    id: "ask",
-    label: "Ask Vigil",
-    title: "Ask Vigil",
-    description: "Get answers from your runbooks and live data, with sources.",
-    icon: ico("M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"),
   },
   {
     id: "approvals",
     label: "Approvals",
     title: "Approvals",
-    description: "Nothing happens until you say so.",
-    badge: "2",
-    icon: ico("M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"),
+    icon: CheckCircle2,
   },
-];
-
-const LIBRARY: NavItem[] = [
   {
     id: "postmortem",
     label: "Postmortems",
-    title: "Postmortem",
-    description: "Review and publish the write-up for a resolved incident.",
-    icon: ico("M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.6a1 1 0 01.7.3l5.4 5.4a1 1 0 01.3.7V19a2 2 0 01-2 2z"),
+    title: "Postmortems",
+    icon: FileText,
   },
   {
     id: "ops",
     label: "Runbooks",
     title: "Runbooks & usage",
-    description: "The knowledge Vigil uses, and what it costs to run.",
-    icon: ico("M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z"),
+    icon: BookOpen,
   },
 ];
 
-const SETTINGS_ITEM: NavItem = {
-  id: "settings",
-  label: "Settings",
-  title: "Settings",
-  description: "Your profile, team, billing, and notifications.",
-  icon: ico("M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 00-2.1-1.2L14.5 3h-4l-.4 2.6a7.6 7.6 0 00-2.1 1.2l-2.4-1-2 3.4 2 1.6a7.400 7.400 0 000 2.400l-2 1.600 2 3.400 2.400-1c.600.500 1.300.900 2.100 1.200l.400 2.600h4l.400-2.600c.800-.300 1.500-.700 2.100-1.200l2.400 1 2-3.400-2-1.600c.100-.400.100-.800.100-1.200z"),
+const ALL_TABS: TabId[] = [
+  "ask",
+  "history",
+  "incident",
+  "approvals",
+  "postmortem",
+  "ops",
+  "settings",
+];
+
+const VIEW_TITLES: Record<TabId, string> = {
+  ask: "Vigil",
+  history: "Chat history",
+  incident: "Incidents",
+  approvals: "Approvals",
+  postmortem: "Postmortems",
+  ops: "Runbooks & usage",
+  settings: "Settings",
 };
 
-const ALL = [...WORKSPACE, ...LIBRARY, SETTINGS_ITEM];
-
-function NavButton({
-  item,
-  active,
-  onClick,
-}: {
-  item: NavItem;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-      className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-[7px] text-left text-[13px] font-medium transition-colors ${
-        active
-          ? "bg-white/[0.06] text-white"
-          : "text-[#8f9093] hover:bg-white/[0.03] hover:text-white"
-      }`}
-    >
-      <span className={active ? "text-[#ff6b4a]" : "text-[#6f7074] group-hover:text-[#b4b4b6]"}>{item.icon}</span>
-      <span className="flex-1">{item.label}</span>
-      {item.badge && (
-        <span className="rounded-md bg-white/[0.07] px-1.5 py-px text-[11px] font-medium tabular-nums text-[#c9c9cb]">
-          {item.badge}
-        </span>
-      )}
-      {item.dot && (
-        <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a4a]" />
-      )}
-    </button>
-  );
+function makeThreadId() {
+  return `vigil_thr_${Math.random().toString(36).substring(2, 9)}`;
 }
 
 function DashboardContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const [tab, setTab] = useState<TabId>("ask");
+  const urlTabParam = params.get("tab") as TabId | null;
+  const validUrlTab =
+    urlTabParam && ALL_TABS.includes(urlTabParam) ? urlTabParam : null;
+
+  const [tab, setTab] = useState<TabId>(validUrlTab ?? "ask");
+  const [syncedUrlTab, setSyncedUrlTab] = useState<TabId | null>(validUrlTab);
+  if (validUrlTab !== syncedUrlTab) {
+    setSyncedUrlTab(validUrlTab);
+    if (validUrlTab) setTab(validUrlTab);
+  }
+
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const historyScope = user?.userId || "local";
+  const threads = useChatHistory(historyScope);
+
+  const [activeChatId, setActiveChatId] = useState<string>("vigil_thr_981a2f");
+  const [activeInitialTurns, setActiveInitialTurns] = useState<ChatTurn[]>([]);
+  const [activeInitialMode, setActiveInitialMode] = useState<Mode>("ask");
+  const [chatInstanceKey, setChatInstanceKey] = useState(0);
+
   const [showNew, setShowNew] = useState(false);
   const [title, setTitle] = useState("");
   const [severity, setSeverity] = useState<Severity>("SEV-2");
   const [creating, setCreating] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [pendingCount, setPendingCount] = useState<number>(0);
   const [latestIncident, setLatestIncident] = useState<LiveIncidentData | null>(
     null
   );
 
-  useEffect(() => {
-    const t = params.get("tab") as TabId | null;
-    if (t && ALL.some((x) => x.id === t)) setTab(t);
-  }, [params]);
+  const refreshPendingApprovals = useCallback(() => {
+    listApprovals("pending")
+      .then((rows) => setPendingCount(rows.length))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     getMe().then((u) => {
       if (u) setUser(u);
     });
-    listApprovals("pending")
-      .then((rows) => setPendingCount(rows.length))
-      .catch(() => {});
-  }, [tab]);
+    refreshPendingApprovals();
+  }, [tab, refreshPendingApprovals]);
 
-  const current = ALL.find((n) => n.id === tab) ?? ALL[0];
+  useEffect(() => {
+    if (!showNew) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowNew(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [showNew]);
+
+  const handleTurnsChange = useCallback(
+    (
+      threadId: string,
+      turns: ChatTurn[],
+      mode: Mode,
+      replacedThreadId?: string
+    ) => {
+      if (turns.length === 0) return;
+      setActiveChatId(threadId);
+      upsertChatThread(historyScope, {
+        id: threadId,
+        turns,
+        mode,
+        replacedId: replacedThreadId,
+      });
+    },
+    [historyScope]
+  );
+
+  const handleSelectTab = (next: TabId) => {
+    setTab(next);
+    setMobileMenuOpen(false);
+  };
+
+  const handleNewChat = useCallback(() => {
+    const freshId = makeThreadId();
+    setActiveChatId(freshId);
+    setActiveInitialTurns([]);
+    setActiveInitialMode("ask");
+    setChatInstanceKey((k) => k + 1);
+    setTab("ask");
+    setMobileMenuOpen(false);
+  }, []);
+
+  const handleSelectThread = useCallback((thread: ChatThread) => {
+    setActiveChatId(thread.id);
+    setActiveInitialTurns(thread.turns);
+    setActiveInitialMode(thread.mode);
+    setChatInstanceKey((k) => k + 1);
+    setTab("ask");
+    setMobileMenuOpen(false);
+  }, []);
+
+  const handleRenameThread = useCallback(
+    (id: string, nextTitle: string) => {
+      renameChatThread(historyScope, id, nextTitle);
+    },
+    [historyScope]
+  );
+
+  const handleDeleteThread = useCallback(
+    (id: string) => {
+      deleteChatThread(historyScope, id);
+      if (activeChatId === id) {
+        const freshId = makeThreadId();
+        setActiveChatId(freshId);
+        setActiveInitialTurns([]);
+        setActiveInitialMode("ask");
+        setChatInstanceKey((k) => k + 1);
+      }
+    },
+    [historyScope, activeChatId]
+  );
+
+  const handleClearHistory = useCallback(() => {
+    clearChatThreads(historyScope);
+    const freshId = makeThreadId();
+    setActiveChatId(freshId);
+    setActiveInitialTurns([]);
+    setActiveInitialMode("ask");
+    setChatInstanceKey((k) => k + 1);
+  }, [historyScope]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,234 +271,513 @@ function DashboardContent() {
         timeline: res.timeline,
         answer: res.answer,
       });
+      refreshPendingApprovals();
     } catch {
       // Offline demo fallback
     } finally {
       setCreating(false);
       setShowNew(false);
       setTab("incident");
-      setBanner(
-        `Incident created: "${cleanTitle}" (${severity}). Vigil is investigating.`
-      );
+      setBanner(`Investigating "${cleanTitle}" (${severity}).`);
       setTitle("");
     }
   };
 
-  const orgName = user?.orgName || "Acme Payments";
-  const orgInitial = orgName[0]?.toUpperCase() || "A";
-  const userName = user?.name || "Alex Chen";
-  const userInitials =
-    userName
-      .split(" ")
-      .map((p) => p[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "AC";
-  const userSub = user ? `${user.role} · ${user.email}` : "Pro plan";
+  const displayName = user?.name || "Account";
+  const displaySub = user?.email || "Settings & preferences";
+  const userInitials = user?.name
+    ? user.name
+        .split(" ")
+        .map((p) => p[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "V";
 
-  return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#0a0b0d] text-white lg:flex-row">
-      {/* Sidebar (desktop) */}
-      <aside className="hidden h-full w-[248px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0a0b0d] px-3 py-4 lg:flex">
-        <Link href="/" className="flex items-center gap-2.5 px-3 py-1.5">
-          <Image src="/vigil.svg" alt="Vigil" width={24} height={24} className="h-6 w-6 object-contain" />
-          <span className="text-[16px] font-semibold tracking-[-0.02em]">Vigil</span>
+  const sidebarToggleButton = (
+    <div className="flex items-center">
+      <button
+        type="button"
+        onClick={() => setMobileMenuOpen(true)}
+        aria-label="Open navigation menu"
+        className="mr-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[#9b9da6] transition-colors hover:bg-white/[0.06] hover:text-[#f2f2f4] lg:hidden"
+      >
+        <Menu className="h-4 w-4" aria-hidden="true" />
+      </button>
+
+      {!sidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Expand sidebar"
+          title="Open sidebar"
+          className="mr-1 hidden h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[#9b9da6] transition-colors hover:bg-white/[0.06] hover:text-[#f2f2f4] lg:flex"
+        >
+          <PanelLeft className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+
+  const recentSidebarThreads = threads.slice(0, 8);
+
+  const sidebarContent = (isMobile = false) => (
+    <div className="flex h-full flex-col bg-[#121316]">
+      {/* Brand + Collapse Header */}
+      <div className="flex h-[54px] shrink-0 items-center justify-between px-3.5">
+        <Link
+          href="/"
+          className="flex items-center gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-white/[0.04]"
+        >
+          <Image
+            src="/vigil.svg"
+            alt="Vigil"
+            width={20}
+            height={20}
+            className="h-5 w-5 object-contain"
+          />
+          <span className="text-[14.5px] font-semibold tracking-[-0.015em] text-[#f2f2f4]">
+            Vigil
+          </span>
         </Link>
 
-        <div className="mt-5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-white/[0.04] transition-colors">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[#ffb347] to-[#ff2f3a] text-[11px] font-semibold text-[#07080a]">
-            {orgInitial}
-          </span>
-          <div className="min-w-0 leading-tight">
-            <div className="truncate text-[13px] font-medium">{orgName}</div>
-            <div className="text-[11px] text-[#77787b]">Workspace</div>
-          </div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="ml-auto h-3.5 w-3.5 shrink-0 text-[#6f7074]"><path d="M7 15l5 5 5-5M7 9l5-5 5 5" /></svg>
-        </div>
+        {isMobile ? (
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close navigation menu"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[#8a8c95] transition-colors hover:bg-white/[0.06] hover:text-[#f2f2f4]"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Collapse sidebar"
+            title="Close sidebar"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[#8a8c95] transition-colors hover:bg-white/[0.06] hover:text-[#f2f2f4]"
+          >
+            <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+
+      {/* Primary Action: New Chat */}
+      <div className="px-2.5 pt-1 pb-2.5">
+        <button
+          type="button"
+          onClick={handleNewChat}
+          className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[13.5px] font-medium text-[#ececef] transition-colors hover:border-white/[0.13] hover:bg-white/[0.06]"
+        >
+          <SquarePen className="h-4 w-4 shrink-0 text-[#e56b4e]" aria-hidden="true" />
+          <span>New chat</span>
+        </button>
+      </div>
+
+      {/* Navigation + Persistent Recent Chats */}
+      <nav
+        aria-label="Dashboard navigation"
+        className="dash-scroll flex-1 overflow-y-auto px-2.5 space-y-0.5"
+      >
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const active = tab === item.id;
+          const badgeCount =
+            item.id === "approvals"
+              ? pendingCount
+              : item.id === "history"
+                ? threads.length
+                : 0;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => handleSelectTab(item.id)}
+              aria-current={active ? "page" : undefined}
+              className={`group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium transition-colors ${
+                active
+                  ? "bg-white/[0.08] text-[#f2f2f4]"
+                  : "text-[#9b9da6] hover:bg-white/[0.04] hover:text-[#f2f2f4]"
+              }`}
+            >
+              <Icon
+                className={`h-4 w-4 shrink-0 ${
+                  active
+                    ? "text-[#f2f2f4]"
+                    : "text-[#7c7f8a] group-hover:text-[#cfd1d8]"
+                }`}
+                aria-hidden={true}
+              />
+              <span className="flex-1 truncate">{item.label}</span>
+              {badgeCount > 0 && (
+                <span
+                  className={`rounded-full px-1.5 py-px font-mono-only text-[11px] font-medium tabular-nums ${
+                    item.id === "approvals"
+                      ? "bg-[#e56b4e]/15 text-[#fba792]"
+                      : "bg-white/[0.07] text-[#9b9da6]"
+                  }`}
+                >
+                  {badgeCount}
+                </span>
+              )}
+              {item.dot && (
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-[#e56b4e]"
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          );
+        })}
 
         <button
-          onClick={() => setShowNew(true)}
-          className="dash-btn-primary mt-3 w-full"
+          type="button"
+          onClick={() => {
+            setMobileMenuOpen(false);
+            setShowNew(true);
+          }}
+          className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-[#8a8c95] transition-colors hover:bg-white/[0.04] hover:text-[#f2f2f4]"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-3.5 w-3.5"><path d="M12 5v14M5 12h14" /></svg>
-          New incident
+          <Plus className="h-4 w-4 shrink-0 text-[#7c7f8a]" aria-hidden="true" />
+          <span>Declare incident</span>
         </button>
 
-        <nav aria-label="Dashboard" className="mt-7 flex-1 space-y-7 overflow-y-auto">
-          <div>
-            <div className="dash-eyebrow px-3 pb-2">
-              Workspace
-            </div>
-            <div className="space-y-0.5">
-              {WORKSPACE.map((n) => (
-                <NavButton
-                  key={n.id}
-                  item={
-                    n.id === "approvals" && pendingCount !== null
-                      ? { ...n, badge: pendingCount > 0 ? String(pendingCount) : undefined }
-                      : n
-                  }
-                  active={tab === n.id}
-                  onClick={() => setTab(n.id)}
-                />
-              ))}
-            </div>
+        {/* Recent Chats Section (always clean, synced with localStorage) */}
+        <div className="mt-4 border-t border-white/[0.06] pt-3.5">
+          <div className="flex items-center justify-between px-2.5 pb-1.5">
+            <span className="text-[11px] font-medium text-[#6e717c]">
+              Recent chats
+            </span>
+            {threads.length > 0 && (
+              <button
+                type="button"
+                onClick={() => handleSelectTab("history")}
+                className="cursor-pointer text-[11px] text-[#7c7f8a] transition-colors hover:text-[#ececef]"
+              >
+                All
+              </button>
+            )}
           </div>
-          <div>
-            <div className="dash-eyebrow px-3 pb-2">
-              Library
-            </div>
-            <div className="space-y-0.5">
-              {LIBRARY.map((n) => (
-                <NavButton key={n.id} item={n} active={tab === n.id} onClick={() => setTab(n.id)} />
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="dash-eyebrow px-3 pb-2">
-              Account
-            </div>
-            <div className="space-y-0.5">
-              <NavButton item={SETTINGS_ITEM} active={tab === "settings"} onClick={() => setTab("settings")} />
-            </div>
-          </div>
-        </nav>
 
-        <div className="flex items-center gap-3 rounded-lg border-t border-white/[0.06] px-2.5 pt-3">
+          {recentSidebarThreads.length === 0 ? (
+            <p className="px-2.5 py-1.5 text-[12px] text-[#5e616b]">
+              Your chats will appear here.
+            </p>
+          ) : (
+            <div className="space-y-0.5">
+              {recentSidebarThreads.map((t) => {
+                const isCurrent = tab === "ask" && activeChatId === t.id;
+                return (
+                  <div
+                    key={t.id}
+                    className={`group flex items-center rounded-lg transition-colors ${
+                      isCurrent
+                        ? "bg-white/[0.08] text-[#f2f2f4]"
+                        : "text-[#9b9da6] hover:bg-white/[0.04] hover:text-[#f2f2f4]"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSelectThread(t)}
+                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-[13px]"
+                    >
+                      <MessageSquare
+                        className="h-3.5 w-3.5 shrink-0 text-[#6e717c]"
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{t.title}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteThread(t.id)}
+                      aria-label={`Delete chat ${t.title}`}
+                      className="mr-1 cursor-pointer rounded p-1 text-[#6e717c] opacity-0 transition-opacity hover:bg-white/[0.06] hover:text-[#ececef] group-hover:opacity-100 focus-visible:opacity-100"
+                    >
+                      <Trash2 className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </nav>
+
+      {/* Clean Footer: User Account + Settings + Sign out */}
+      <div className="shrink-0 border-t border-white/[0.06] p-2.5">
+        <div className="flex items-center gap-1">
           <button
-            onClick={() => setTab("settings")}
+            type="button"
+            onClick={() => handleSelectTab("settings")}
             aria-label="Open settings"
-            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
+              tab === "settings" ? "bg-white/[0.08]" : "hover:bg-white/[0.04]"
+            }`}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[12px] font-medium">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.1] text-[11px] font-medium text-[#f2f2f4]">
               {userInitials}
             </span>
             <div className="min-w-0 leading-tight">
-              <div className="truncate text-[13px] font-medium">{userName}</div>
-              <div className="truncate text-[11px] text-[#77787b]">{userSub}</div>
+              <div className="truncate text-[13px] font-medium text-[#ececef]">
+                {displayName}
+              </div>
+              <div className="truncate text-[11px] text-[#7c7f8a]">
+                {displaySub}
+              </div>
             </div>
           </button>
+
+          <button
+            type="button"
+            onClick={() => handleSelectTab("settings")}
+            aria-label="Settings"
+            title="Settings"
+            className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+              tab === "settings"
+                ? "bg-white/[0.08] text-[#f2f2f4]"
+                : "text-[#7c7f8a] hover:bg-white/[0.05] hover:text-[#f2f2f4]"
+            }`}
+          >
+            <Settings className="h-4 w-4" aria-hidden="true" />
+          </button>
+
           <button
             type="button"
             onClick={async () => {
               await signOut();
               router.push("/login");
             }}
-            aria-label="Log out"
-            className="text-[#9c9c9d] hover:text-white"
+            aria-label="Sign out"
+            title="Sign out"
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[#7c7f8a] transition-colors hover:bg-white/[0.05] hover:text-[#f2f2f4]"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4m7 14l5-5-5-5m5 5H9" />
-            </svg>
+            <LogOut className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="dash-surface flex h-screen w-full overflow-hidden">
+      {/* Desktop Collapsible Sidebar */}
+      <aside
+        className={`hidden h-full shrink-0 overflow-hidden border-r border-white/[0.06] transition-[width] duration-200 ease-out lg:block ${
+          sidebarOpen ? "w-[252px]" : "w-0 border-r-0"
+        }`}
+      >
+        <div className="h-full w-[252px]">{sidebarContent(false)}</div>
       </aside>
 
-      {/* Main */}
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[240px] bg-[radial-gradient(ellipse_50%_100%_at_50%_0%,rgba(255,107,74,0.05),transparent)]" />
+      {/* Mobile Drawer Sidebar */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-[2px]"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="relative z-10 h-full w-[268px] border-r border-white/[0.08] shadow-2xl">
+            {sidebarContent(true)}
+          </aside>
+        </div>
+      )}
 
-        {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#08090b]/90 backdrop-blur-xl lg:hidden">
-          <div className="flex items-center justify-between px-4 py-3">
-            <Link href="/" className="flex items-center gap-2">
-              <Image src="/vigil.svg" alt="Vigil" width={22} height={22} className="h-[22px] w-[22px] object-contain" />
-              <span className="text-[15px] font-semibold">Vigil</span>
-            </Link>
-            <button onClick={() => setShowNew(true)} className="dash-btn-primary !px-3 !py-1.5 !text-[12.5px]">
-              New incident
-            </button>
-          </div>
-          <div className="flex gap-1 overflow-x-auto px-3 pb-2">
-            {ALL.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => setTab(n.id)}
-                className={`shrink-0 rounded-md px-3 py-1.5 text-[13px] ${
-                  tab === n.id ? "bg-white/10 text-white" : "text-[#9c9c9d]"
-                }`}
-              >
-                {n.label}
-              </button>
-            ))}
-          </div>
-        </header>
+      {/* Main Content Area */}
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-[#17181b]">
+        {/* Keep Chat mounted while switching tabs so active conversation is never lost */}
+        <div
+          className={
+            tab === "ask" ? "h-full w-full overflow-hidden" : "hidden"
+          }
+        >
+          <AskCopilotView
+            key={chatInstanceKey}
+            initialThreadId={activeChatId}
+            initialTurns={activeInitialTurns}
+            initialMode={activeInitialMode}
+            sidebarToggle={sidebarToggleButton}
+            historyCount={threads.length}
+            onOpenHistory={() => handleSelectTab("history")}
+            onNewChat={handleNewChat}
+            onTurnsChange={handleTurnsChange}
+            onApprovalDecision={() => refreshPendingApprovals()}
+          />
+        </div>
 
-        {tab === "ask" ? (
-          <div className="relative z-10 h-[calc(100vh-88px)] lg:h-screen w-full overflow-hidden">
-            <AskCopilotView />
-          </div>
-        ) : (
-          <main className="relative z-10 mx-auto max-w-[1100px] px-4 py-8 sm:px-8 lg:py-10">
-            <div className="mb-7 border-b border-white/[0.06] pb-6">
-              <h1 className="text-[22px] font-semibold tracking-[-0.02em]">{current.title}</h1>
-              <p className="mt-1 text-[13.5px] text-[#8f9093]">{current.description}</p>
-            </div>
-
-            {banner && (
-              <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-[#ffb347]/30 bg-[#ff2f3a]/10 px-4 py-3 text-[13px] text-[#ffb347]">
-                <span>{banner}</span>
-                <button onClick={() => setBanner(null)} aria-label="Dismiss" className="text-white/70 hover:text-white">
-                  ✕
-                </button>
+        {tab !== "ask" && (
+          <>
+            <header className="flex h-[54px] shrink-0 items-center justify-between border-b border-white/[0.06] px-4 sm:px-6">
+              <div className="flex items-center gap-2 min-w-0">
+                {sidebarToggleButton}
+                <h1 className="truncate text-[14.5px] font-medium text-[#f2f2f4]">
+                  {VIEW_TITLES[tab]}
+                </h1>
               </div>
-            )}
 
-            {tab === "incident" && (
-              <IncidentRoomView
-                latestCreated={latestIncident}
-                onNavigateApproval={() => setTab("approvals")}
-              />
-            )}
-            {tab === "approvals" && (
-              <ApprovalsInboxView currentRole={user?.role ?? "lead"} />
-            )}
-            {tab === "postmortem" && <PostmortemEditorView />}
-            {tab === "ops" && <DocsAdminAndOpsView />}
-            {tab === "settings" && <SettingsView />}
-          </main>
+              {tab === "incident" && (
+                <button
+                  type="button"
+                  onClick={() => setShowNew(true)}
+                  className="dash-btn-primary !py-1.5 !px-3 !text-[12.5px]"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>New incident</span>
+                </button>
+              )}
+            </header>
+
+            <main className="dash-scroll flex-1 overflow-y-auto">
+              <div className="mx-auto max-w-[960px] px-4 py-7 sm:px-8">
+                {banner && (
+                  <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-[#e56b4e]/25 bg-[#e56b4e]/10 px-4 py-2.5 text-[13px] text-[#fba792]">
+                    <span>{banner}</span>
+                    <button
+                      type="button"
+                      onClick={() => setBanner(null)}
+                      aria-label="Dismiss notification"
+                      className="cursor-pointer rounded p-1 text-[#fba792]/70 hover:bg-white/[0.06] hover:text-white"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+
+                {tab === "history" && (
+                  <ChatHistoryView
+                    threads={threads}
+                    activeThreadId={activeChatId}
+                    onSelectThread={handleSelectThread}
+                    onNewChat={handleNewChat}
+                    onRenameThread={handleRenameThread}
+                    onDeleteThread={handleDeleteThread}
+                    onClearAll={handleClearHistory}
+                  />
+                )}
+                {tab === "incident" && (
+                  <IncidentRoomView
+                    latestCreated={latestIncident}
+                    onNavigateApproval={() => setTab("approvals")}
+                    onNavigatePostmortem={() => setTab("postmortem")}
+                  />
+                )}
+                {tab === "approvals" && (
+                  <ApprovalsInboxView
+                    currentRole={user?.role ?? "lead"}
+                    onDecisionComplete={refreshPendingApprovals}
+                  />
+                )}
+                {tab === "postmortem" && <PostmortemEditorView />}
+                {tab === "ops" && <DocsAdminAndOpsView />}
+                {tab === "settings" && <SettingsView />}
+              </div>
+            </main>
+          </>
         )}
       </div>
 
+      {/* Clean New Incident Modal */}
       {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <form onSubmit={create} className="dash-card w-full max-w-[440px] p-6 shadow-2xl">
-            <h3 className="text-[18px] font-semibold">New incident</h3>
-            <label htmlFor="inc-title" className="mt-4 block text-[13px] font-medium">
-              What&apos;s happening?
-            </label>
-            <input
-              id="inc-title"
-              autoFocus
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Checkout errors in EU-West"
-              className="mt-1.5 w-full rounded-lg border border-white/15 bg-white/[0.04] px-3.5 py-2.5 text-[14px] caret-[#ff6b4a] outline-none placeholder:text-[#9c9c9d]/60 focus:border-[#ff6b4a]"
-            />
-            <label htmlFor="inc-sev" className="mt-4 block text-[13px] font-medium">
-              Severity
-            </label>
-            <select
-              id="inc-sev"
-              value={severity}
-              onChange={(e) => setSeverity(e.target.value as Severity)}
-              className="mt-1.5 w-full rounded-lg border border-white/15 bg-[#0b0c0f] px-3 py-2.5 text-[14px] outline-none focus:border-[#ff6b4a]"
-            >
-              <option>SEV-1</option>
-              <option>SEV-2</option>
-              <option>SEV-3</option>
-            </select>
-            <div className="mt-6 flex justify-end gap-2.5">
-              <button type="button" onClick={() => setShowNew(false)} className="dash-btn-ghost">
+        <div
+          className="dash-fade fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-[2px]"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowNew(false);
+          }}
+        >
+          <form
+            onSubmit={create}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-incident-title"
+            className="dash-pop w-full max-w-[440px] overflow-hidden rounded-2xl border border-white/[0.09] bg-[#1d1f24] shadow-[0_24px_64px_-16px_rgba(0,0,0,0.85)]"
+          >
+            <div className="flex items-start justify-between border-b border-white/[0.06] px-6 py-4">
+              <div>
+                <h3
+                  id="new-incident-title"
+                  className="text-[15.5px] font-semibold text-[#f2f2f4]"
+                >
+                  Declare incident
+                </h3>
+                <p className="mt-0.5 text-[12.5px] text-[#94969e]">
+                  Vigil will check runbooks, recent deploys, and logs.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNew(false)}
+                aria-label="Close modal"
+                className="-mr-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[#94969e] transition-colors hover:bg-white/[0.06] hover:text-[#f2f2f4]"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div>
+                <label
+                  htmlFor="inc-title"
+                  className="mb-1.5 block text-[12.5px] font-medium text-[#c2c4cc]"
+                >
+                  What&apos;s happening?
+                </label>
+                <input
+                  id="inc-title"
+                  autoFocus
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Checkout errors in eu-west-1"
+                  className="dash-input"
+                />
+              </div>
+
+              <div>
+                <span className="mb-1.5 block text-[12.5px] font-medium text-[#c2c4cc]">
+                  Severity
+                </span>
+                <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-white/[0.07] bg-[#141519] p-1">
+                  {(["SEV-1", "SEV-2", "SEV-3"] as Severity[]).map((s) => {
+                    const active = severity === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSeverity(s)}
+                        className={`font-mono-only cursor-pointer rounded-lg py-1.5 text-[12px] font-medium transition-colors ${
+                          active
+                            ? s === "SEV-1"
+                              ? "bg-rose-500/20 text-rose-300"
+                              : s === "SEV-2"
+                                ? "bg-amber-500/20 text-amber-300"
+                                : "bg-white/[0.11] text-[#f2f2f4]"
+                            : "text-[#8e909a] hover:text-[#f2f2f4]"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-white/[0.06] px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setShowNew(false)}
+                className="dash-btn-ghost"
+              >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={creating}
-                className="dash-btn-primary !px-5 !py-2 !text-[13px]"
+                disabled={creating || !title.trim()}
+                className="dash-btn-primary"
               >
-                {creating ? "Investigating…" : "Create"}
+                {creating ? "Investigating…" : "Start investigation"}
               </button>
             </div>
           </form>
@@ -410,7 +789,7 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0b0d]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-[#17181b]" />}>
       <DashboardContent />
     </Suspense>
   );

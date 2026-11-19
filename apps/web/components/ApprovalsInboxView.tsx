@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import { decideApproval, listApprovals, type ApprovalRow } from "@/lib/api";
 
 interface ApprovalItem {
@@ -32,7 +33,10 @@ const INITIAL: ApprovalItem[] = [
     why: "Lets support and merchant teams know the cause is found and a rollback is underway.",
     details: [
       ["Channel", "#incidents-payments"],
-      ["Message", "INC-2048: checkout errors traced to DB pool exhaustion. Rolling back."],
+      [
+        "Message",
+        "INC-2048: checkout errors traced to DB pool exhaustion. Rolling back.",
+      ],
     ],
     status: "pending",
   },
@@ -51,7 +55,8 @@ const INITIAL: ApprovalItem[] = [
 
 function mapApprovalRow(r: ApprovalRow): ApprovalItem {
   const entries = Object.entries(r.action?.payload ?? {}).map(
-    ([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)] as [string, string]
+    ([k, v]) =>
+      [k, typeof v === "string" ? v : JSON.stringify(v)] as [string, string]
   );
   return {
     id: r.id,
@@ -65,10 +70,13 @@ function mapApprovalRow(r: ApprovalRow): ApprovalItem {
 
 export function ApprovalsInboxView({
   currentRole = "lead",
+  onDecisionComplete,
 }: {
   currentRole?: "viewer" | "responder" | "lead" | "admin";
+  onDecisionComplete?: () => void;
 }) {
   const [items, setItems] = useState<ApprovalItem[]>(INITIAL);
+  const [filter, setFilter] = useState<"all" | "pending" | "decided">("all");
   const [selectedId, setSelectedId] = useState("a1");
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -85,7 +93,15 @@ export function ApprovalsInboxView({
       .catch(() => {});
   }, []);
 
-  const selected = items.find((i) => i.id === selectedId) ?? items[0];
+  const filtered = items.filter((item) => {
+    if (filter === "pending") return item.status === "pending";
+    if (filter === "decided") return item.status !== "pending";
+    return true;
+  });
+
+  const selected =
+    filtered.find((i) => i.id === selectedId) ?? filtered[0] ?? items[0];
+  const pendingCount = items.filter((i) => i.status === "pending").length;
   const canDecide =
     currentRole !== "viewer" && selected?.status === "pending" && !submitting;
 
@@ -105,99 +121,181 @@ export function ApprovalsInboxView({
       // Offline demo fallback
     } finally {
       setSubmitting(false);
+      onDecisionComplete?.();
     }
   };
 
-  const badge = (s: ApprovalItem["status"]) =>
-    s === "pending"
-      ? "border-amber-400/25 bg-amber-400/10 text-amber-300"
-      : s === "approved"
-        ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
-        : "border-[#ff5a4a]/30 bg-[#ff5a4a]/10 text-[#ff8a78]";
-
-  if (!selected) return null;
+  const renderStatus = (s: ApprovalItem["status"]) => {
+    if (s === "pending") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-[#e56b4e]/12 px-2 py-0.5 text-[11px] font-medium text-[#f7a08a]">
+          <Clock className="h-3 w-3" aria-hidden="true" />
+          Pending
+        </span>
+      );
+    }
+    if (s === "approved") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+          <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+          Approved
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium text-[#94969e]">
+        <XCircle className="h-3 w-3" aria-hidden="true" />
+        Rejected
+      </span>
+    );
+  };
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-      <div className="space-y-3 lg:col-span-2">
-        <h2 className="dash-eyebrow">
-          {items.filter((i) => i.status === "pending").length} waiting for you
-        </h2>
-        {items.map((i) => (
-          <button
-            key={i.id}
-            onClick={() => {
-              setSelectedId(i.id);
-              setFeedback(null);
-            }}
-            className={`w-full rounded-xl border p-4 text-left transition-colors ${
-              i.id === selected.id
-                ? "dash-row-active"
-                : "border-white/[0.07] bg-[#0d0e11] hover:border-white/15"
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] text-[#9c9c9d]">{i.target}</span>
-              <span
-                className={`rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize ${badge(i.status)}`}
-              >
-                {i.status}
-              </span>
-            </div>
-            <div className="mt-2 text-[14.5px] font-medium">{i.title}</div>
-          </button>
-        ))}
-      </div>
-
-      <div className="dash-card p-6 lg:col-span-3">
-        <div className="dash-eyebrow">{selected.target}</div>
-        <h3 className="mt-1 text-[20px] font-semibold tracking-[-0.02em]">
-          {selected.title}
-        </h3>
-
-        <div className="mt-5">
-          <div className="dash-eyebrow">Why Vigil suggests this</div>
-          <p className="mt-1 text-[14px] leading-relaxed">{selected.why}</p>
-        </div>
-
-        <dl className="mt-5 divide-y divide-white/[0.05] rounded-xl border border-white/[0.07] bg-black/25">
-          {selected.details.map(([k, v]) => (
-            <div key={k} className="flex justify-between gap-4 px-4 py-2.5 text-[13px]">
-              <dt className="text-[#77787b]">{k}</dt>
-              <dd className="text-right">{v}</dd>
-            </div>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-lg bg-white/[0.04] p-0.5">
+          {(
+            [
+              { id: "all", label: `All (${items.length})` },
+              { id: "pending", label: `Pending (${pendingCount})` },
+              {
+                id: "decided",
+                label: `Decided (${items.length - pendingCount})`,
+              },
+            ] as const
+          ).map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFilter(f.id)}
+              className={`cursor-pointer rounded-md px-3 py-1 text-[12.5px] font-medium transition-colors ${
+                filter === f.id
+                  ? "bg-white/[0.1] text-[#ececef]"
+                  : "text-[#8a8c95] hover:text-[#d8dae0]"
+              }`}
+            >
+              {f.label}
+            </button>
           ))}
-        </dl>
-
-        {feedback && (
-          <p className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3.5 py-2.5 text-[13px] text-emerald-300">
-            {feedback}
-          </p>
-        )}
-
-        {currentRole === "viewer" && (
-          <p className="mt-4 text-[12.5px] text-[#ffb347]">
-            Viewers can&apos;t approve actions.
-          </p>
-        )}
-
-        <div className="mt-6 flex justify-end gap-2.5">
-          <button
-            disabled={!canDecide}
-            onClick={() => decide("rejected")}
-            className="dash-btn-ghost"
-          >
-            Reject
-          </button>
-          <button
-            disabled={!canDecide}
-            onClick={() => decide("approved")}
-            className="dash-btn-primary"
-          >
-            {submitting ? "Executing…" : "Approve"}
-          </button>
         </div>
+
+        <span className="text-[12.5px] text-[#7c7e87]">
+          Actions never execute without explicit sign-off.
+        </span>
       </div>
+
+      {filtered.length === 0 ? (
+        <div className="dash-card py-14 text-center">
+          <p className="text-[14px] font-medium text-[#d8dae0]">
+            No approvals in this view
+          </p>
+          <p className="mt-1 text-[13px] text-[#7c7e87]">
+            Pending remediation requests from Vigil will appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          <div className="space-y-2 lg:col-span-5">
+            {filtered.map((i) => {
+              const active = selected?.id === i.id;
+              return (
+                <button
+                  key={i.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(i.id);
+                    setFeedback(null);
+                  }}
+                  className={`w-full cursor-pointer rounded-xl border p-4 text-left transition-colors ${
+                    active
+                      ? "border-white/[0.18] bg-[#24262c]"
+                      : "border-white/[0.06] bg-[#1d1f24] hover:border-white/[0.12] hover:bg-[#22242a]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[12px] text-[#8a8c95]">{i.target}</span>
+                    {renderStatus(i.status)}
+                  </div>
+                  <div className="mt-2 text-[14px] font-medium leading-snug text-[#ececef]">
+                    {i.title}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {selected && (
+            <div className="dash-card flex flex-col justify-between p-6 lg:col-span-7">
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[12.5px] font-medium text-[#8a8c95]">
+                    {selected.target}
+                  </span>
+                  {renderStatus(selected.status)}
+                </div>
+
+                <h3 className="mt-2 text-[18px] font-semibold tracking-[-0.02em] text-[#ececef]">
+                  {selected.title}
+                </h3>
+
+                <div className="mt-5">
+                  <div className="text-[12px] font-medium text-[#7c7e87]">
+                    Rationale
+                  </div>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-[#d4d6dc]">
+                    {selected.why}
+                  </p>
+                </div>
+
+                <dl className="mt-5 divide-y divide-white/[0.05] rounded-xl border border-white/[0.06] bg-[#141519]">
+                  {selected.details.map(([k, v]) => (
+                    <div
+                      key={k}
+                      className="flex justify-between gap-4 px-4 py-2.5 text-[13px]"
+                    >
+                      <dt className="shrink-0 text-[#7c7e87]">{k}</dt>
+                      <dd className="text-right text-[#d8dae0] break-words">
+                        {v}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+
+                {feedback && (
+                  <p className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-2.5 text-[13px] text-emerald-300">
+                    {feedback}
+                  </p>
+                )}
+
+                {currentRole === "viewer" && (
+                  <p className="mt-4 text-[12.5px] text-amber-300/90">
+                    Viewers have read-only access and cannot decide approvals.
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-2 border-t border-white/[0.06] pt-4">
+                <button
+                  type="button"
+                  disabled={!canDecide}
+                  onClick={() => decide("rejected")}
+                  className="dash-btn-ghost"
+                >
+                  Reject
+                </button>
+                <button
+                  type="button"
+                  disabled={!canDecide}
+                  onClick={() => decide("approved")}
+                  className="dash-btn-primary"
+                >
+                  {submitting ? "Executing…" : "Approve & execute"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

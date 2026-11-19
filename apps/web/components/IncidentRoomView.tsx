@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ArrowRight, Check, Plus } from "lucide-react";
 import { listIncidents, type IncidentRow } from "@/lib/api";
 import type { Hypothesis } from "../types/vigil";
 
@@ -8,8 +9,8 @@ const STEPS = [
   { label: "Triage", key: "investigating" },
   { label: "Investigate", key: "investigating" },
   { label: "Rank causes", key: "investigating" },
-  { label: "Awaiting approval", key: "awaiting_approval" },
-  { label: "Resolve", key: "resolved" },
+  { label: "Approval", key: "awaiting_approval" },
+  { label: "Resolved", key: "resolved" },
 ];
 
 const EVIDENCE: Record<string, { source: string; text: string }> = {
@@ -42,6 +43,13 @@ const DEFAULT_CAUSES = [
   },
 ];
 
+const DEFAULT_TIMELINE = [
+  { time: "21:42", text: "Alert classified as SEV-1." },
+  { time: "21:42", text: "Checked runbooks, metrics, and past incidents." },
+  { time: "21:42", text: "Ranked 2 likely causes." },
+  { time: "21:42", text: "Waiting for approval on 2 actions." },
+];
+
 export interface LiveIncidentData {
   incident: IncidentRow;
   hypotheses?: Hypothesis[];
@@ -51,6 +59,7 @@ export interface LiveIncidentData {
 
 export function IncidentRoomView({
   onNavigateApproval,
+  onNavigatePostmortem,
   latestCreated,
 }: {
   onNavigateApproval?: () => void;
@@ -61,12 +70,7 @@ export function IncidentRoomView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [openEv, setOpenEv] = useState("ev_01");
   const [note, setNote] = useState("");
-  const [timeline, setTimeline] = useState([
-    { time: "21:42", text: "Alert classified as SEV-1." },
-    { time: "21:42", text: "Checked runbooks, metrics, and past incidents." },
-    { time: "21:42", text: "Ranked 2 likely causes." },
-    { time: "21:42", text: "Waiting for approval on 2 actions." },
-  ]);
+  const [notes, setNotes] = useState<Array<{ time: string; text: string }>>([]);
 
   useEffect(() => {
     listIncidents()
@@ -79,12 +83,17 @@ export function IncidentRoomView({
       .catch(() => {});
   }, [latestCreated]);
 
-  useEffect(() => {
-    if (latestCreated?.timeline && latestCreated.timeline.length > 0) {
-      const now = new Date().toTimeString().slice(0, 5);
-      setTimeline(latestCreated.timeline.map((t) => ({ time: now, text: t })));
-    }
-  }, [latestCreated]);
+  const baseTimeline =
+    latestCreated?.timeline && latestCreated.timeline.length > 0
+      ? latestCreated.timeline.map((t) => ({
+          time: latestCreated.incident?.openedAt
+            ? new Date(latestCreated.incident.openedAt).toTimeString().slice(0, 5)
+            : "Now",
+          text: t,
+        }))
+      : DEFAULT_TIMELINE;
+
+  const timeline = [...baseTimeline, ...notes];
 
   const activeIncident =
     (latestCreated?.incident?.id === selectedId
@@ -111,9 +120,12 @@ export function IncidentRoomView({
   const addNote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!note.trim()) return;
-    setTimeline((t) => [
+    setNotes((t) => [
       ...t,
-      { time: new Date().toTimeString().slice(0, 5), text: `Note: ${note.trim()}` },
+      {
+        time: new Date().toTimeString().slice(0, 5),
+        text: note.trim(),
+      },
     ]);
     setNote("");
   };
@@ -127,160 +139,242 @@ export function IncidentRoomView({
     : "INC-2048";
   const status = activeIncident?.status || "awaiting_approval";
 
+  const sevStyle =
+    severity === "SEV-1"
+      ? "bg-rose-500/12 text-rose-300"
+      : severity === "SEV-2"
+        ? "bg-amber-500/12 text-amber-300"
+        : "bg-white/[0.07] text-[#c9cbd3]";
+
   return (
     <div className="space-y-6">
       {incidents.length > 1 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {incidents.slice(0, 6).map((inc) => (
-            <button
-              key={inc.id}
-              type="button"
-              onClick={() => setSelectedId(inc.id)}
-              className={`shrink-0 rounded-lg border px-3 py-1.5 text-[12.5px] transition-colors ${
-                inc.id === activeIncident?.id
-                  ? "dash-row-active text-white"
-                  : "border-white/[0.07] bg-[#0d0e11] text-[#8f9093] hover:text-white"
-              }`}
-            >
-              <span className="font-mono-only mr-1.5 text-[11px] text-[#77787b]">
-                {inc.severity}
-              </span>
-              {inc.title.slice(0, 36)}
-            </button>
-          ))}
+        <div className="dash-scroll flex items-center gap-2 overflow-x-auto pb-1">
+          {incidents.slice(0, 6).map((inc) => {
+            const active = inc.id === activeIncident?.id;
+            return (
+              <button
+                key={inc.id}
+                type="button"
+                onClick={() => setSelectedId(inc.id)}
+                className={`shrink-0 cursor-pointer rounded-lg border px-3 py-1.5 text-[12.5px] transition-colors ${
+                  active
+                    ? "border-white/[0.2] bg-white/[0.08] text-[#ececef]"
+                    : "border-white/[0.06] bg-transparent text-[#8a8c95] hover:border-white/[0.12] hover:text-[#ececef]"
+                }`}
+              >
+                <span className="font-mono-only mr-1.5 text-[11px] text-[#7c7e87]">
+                  {inc.severity}
+                </span>
+                {inc.title.slice(0, 38)}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      <div className="dash-card p-6">
+      {/* Incident Overview Card */}
+      <section className="dash-card p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-[12px] text-[#9c9c9d]">
-              <span className="rounded-md border border-[#ff5a4a]/30 bg-[#ff5a4a]/10 px-2 py-0.5 text-[11px] font-semibold text-[#ff8a78]">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span
+                className={`font-mono-only rounded-md px-2 py-0.5 text-[11px] font-medium ${sevStyle}`}
+              >
                 {severity}
               </span>
-              <span className="font-mono-only">{shortId}</span>
+              <span className="font-mono-only text-[12px] text-[#7c7e87]">
+                {shortId}
+              </span>
             </div>
-            <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.02em]">
+            <h2 className="mt-2 text-[19px] font-semibold tracking-[-0.02em] text-[#ececef]">
               {title}
             </h2>
           </div>
-          {onNavigateApproval && (
-            <button onClick={onNavigateApproval} className="dash-btn-primary">
-              Review approvals
-            </button>
-          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            {onNavigatePostmortem && (
+              <button
+                type="button"
+                onClick={onNavigatePostmortem}
+                className="dash-btn-ghost"
+              >
+                Postmortem
+              </button>
+            )}
+            {onNavigateApproval && (
+              <button
+                type="button"
+                onClick={onNavigateApproval}
+                className="dash-btn-primary"
+              >
+                <span>Review approvals</span>
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
         </div>
 
-        <ol className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {/* Clean Step Progress Bar */}
+        <ol className="mt-6 grid grid-cols-2 gap-3 border-t border-white/[0.06] pt-5 sm:grid-cols-5">
           {STEPS.map((s, idx) => {
             const isResolved = status === "resolved";
             const isActive =
               (status === "awaiting_approval" && idx === 3) ||
               (status === "investigating" && idx === 1) ||
+              (status === "mitigating" && idx === 3) ||
               (status === "resolved" && idx === 4);
             const isDone =
               isResolved ||
               (status === "awaiting_approval" && idx < 3) ||
+              (status === "mitigating" && idx < 3) ||
               (status === "investigating" && idx < 1);
+
             return (
-              <li
-                key={s.label}
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-[12.5px] ${
-                  isActive
-                    ? "dash-row-active text-white"
-                    : isDone
-                      ? "border-white/[0.07] bg-white/[0.02] text-[#c9c9cb]"
-                      : "border-white/[0.06] text-[#6f7074]"
-                }`}
-              >
+              <li key={s.label} className="flex items-center gap-2.5">
                 <span
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
                     isActive
-                      ? "bg-[#ff6b4a]"
+                      ? "bg-[#e56b4e]/20 text-[#f7a08a] ring-1 ring-[#e56b4e]/50"
                       : isDone
-                        ? "bg-emerald-400/80"
-                        : "bg-white/15"
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "bg-white/[0.05] text-[#656770]"
                   }`}
-                />
-                {s.label}
+                >
+                  {isDone ? (
+                    <Check className="h-3 w-3" aria-hidden="true" />
+                  ) : (
+                    idx + 1
+                  )}
+                </span>
+                <span
+                  className={`text-[12.5px] ${
+                    isActive
+                      ? "font-medium text-[#ececef]"
+                      : isDone
+                        ? "text-[#b5b7be]"
+                        : "text-[#6b6d76]"
+                  }`}
+                >
+                  {s.label}
+                </span>
               </li>
             );
           })}
         </ol>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="space-y-4 lg:col-span-3">
-          <h3 className="dash-eyebrow">Likely causes</h3>
-          {liveHypotheses.map((c, i) => (
-            <div key={c.title} className="dash-card p-5">
-              <div className="flex items-start justify-between gap-4">
-                <p className="text-[15px] font-medium">
-                  {i + 1}. {c.title}
-                </p>
-                <span className="font-mono-only shrink-0 text-[13px] text-[#c9c9cb]">
-                  {c.confidence}%
-                </span>
-              </div>
-              <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/[0.07]">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#ff9a5a] to-[#e07a67]"
-                  style={{ width: `${c.confidence}%` }}
-                />
-              </div>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#9c9c9d]">
-                <div className="flex items-center gap-1.5">
-                  <span>Sources:</span>
-                  {c.evidence.map((id) => (
-                    <button
-                      key={id}
-                      onClick={() => setOpenEv(id)}
-                      className={`font-mono-only rounded-md px-2 py-0.5 text-[11px] transition-colors ${
-                        openEv === id
-                          ? "bg-white/[0.12] text-white"
-                          : "border border-white/10 text-[#9c9c9d] hover:bg-white/[0.06] hover:text-white"
-                      }`}
-                    >
-                      {id}
-                    </button>
-                  ))}
-                </div>
-                <span className="truncate max-w-[320px]">{c.action}</span>
-              </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Hypotheses & Evidence */}
+        <div className="space-y-4 lg:col-span-7">
+          <div className="dash-card overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
+              <h3 className="text-[13px] font-medium text-[#ececef]">
+                Likely causes
+              </h3>
+              <span className="text-[12px] text-[#7c7e87]">
+                {liveHypotheses.length} ranked
+              </span>
             </div>
-          ))}
+
+            <div className="divide-y divide-white/[0.05]">
+              {liveHypotheses.map((c, i) => (
+                <div key={c.title} className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <p className="text-[14px] font-medium leading-snug text-[#ececef]">
+                      <span className="font-mono-only mr-2 text-[12px] text-[#7c7e87]">
+                        {i + 1}.
+                      </span>
+                      {c.title}
+                    </p>
+                    <span className="font-mono-only shrink-0 text-[12.5px] tabular-nums text-[#b5b7be]">
+                      {c.confidence}%
+                    </span>
+                  </div>
+
+                  <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-white/[0.06]">
+                    <div
+                      className={`h-full rounded-full ${
+                        c.confidence >= 70 ? "bg-[#e56b4e]" : "bg-white/25"
+                      }`}
+                      style={{ width: `${c.confidence}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {c.evidence.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setOpenEv(id)}
+                          className={`font-mono-only cursor-pointer rounded-md px-2 py-0.5 text-[11px] transition-colors ${
+                            openEv === id
+                              ? "bg-white/[0.12] text-[#ececef]"
+                              : "bg-white/[0.04] text-[#8a8c95] hover:bg-white/[0.08] hover:text-[#ececef]"
+                          }`}
+                        >
+                          {id}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="truncate max-w-[300px] text-[#8a8c95]">
+                      {c.action}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           <div className="dash-card p-5">
-            <div className="dash-eyebrow">
-              {EVIDENCE[openEv]?.source ?? "Evidence"}
+            <div className="text-[12px] font-medium text-[#8a8c95]">
+              {EVIDENCE[openEv]?.source ?? "Supporting evidence"}
             </div>
-            <p className="mt-1 text-[14px] leading-relaxed">
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#d8dae0]">
               {latestCreated?.answer || EVIDENCE[openEv]?.text}
             </p>
           </div>
         </div>
 
-        <div className="space-y-4 lg:col-span-2">
-          <div className="dash-card p-5">
-            <h3 className="dash-eyebrow">Timeline</h3>
-            <ul className="mt-3 space-y-2.5">
+        {/* Timeline */}
+        <div className="lg:col-span-5">
+          <div className="dash-card flex flex-col p-5">
+            <h3 className="text-[13px] font-medium text-[#ececef]">
+              Activity timeline
+            </h3>
+
+            <ul className="mt-4 space-y-3 border-l border-white/[0.08] pl-4">
               {timeline.map((t, i) => (
-                <li key={i} className="flex gap-3 text-[13px]">
-                  <span className="font-mono-only text-[#9c9c9d]">{t.time}</span>
-                  <span className="text-white/90">{t.text}</span>
+                <li key={i} className="relative text-[13px] leading-relaxed">
+                  <span
+                    className="absolute -left-[20.5px] top-2 h-1.5 w-1.5 rounded-full bg-white/25"
+                    aria-hidden="true"
+                  />
+                  <span className="font-mono-only mr-2 text-[11.5px] text-[#7c7e87]">
+                    {t.time}
+                  </span>
+                  <span className="text-[#d4d6dc]">{t.text}</span>
                 </li>
               ))}
             </ul>
-            <form onSubmit={addNote} className="mt-4 flex gap-2">
+
+            <form onSubmit={addNote} className="mt-5 flex gap-2 border-t border-white/[0.06] pt-4">
               <input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Add a note…"
-                aria-label="Add a note"
-                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[13px] caret-[#ff6b4a] outline-none placeholder:text-[#9c9c9d] focus:border-[#ff6b4a]"
+                placeholder="Add an investigation note…"
+                aria-label="Add an investigation note"
+                className="dash-input !py-2 !text-[13px]"
               />
-              <button type="submit" className="dash-btn-ghost">
-                Add
+              <button
+                type="submit"
+                disabled={!note.trim()}
+                className="dash-btn-ghost shrink-0 !px-3"
+                aria-label="Add note"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Add</span>
               </button>
             </form>
           </div>
