@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   transpilePackages:["@vigil/shared"],
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    agentUpgrade: "security",
+  },
   turbopack: {
     rules: {
       "*.css": {
