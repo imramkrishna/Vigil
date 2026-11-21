@@ -10,6 +10,7 @@ import {
   type BudgetStatus,
   type DocumentRow,
 } from "@/lib/api";
+import { VigilLoader } from "./VigilLoader";
 
 export function DocsAdminAndOpsView() {
   const [docs, setDocs] = useState<DocumentRow[]>([]);
@@ -237,9 +238,7 @@ export function DocsAdminAndOpsView() {
         </div>
 
         {loading ? (
-          <div className="px-6 py-14 text-center text-[13.5px] text-[#8a8c95]">
-            Loading runbooks…
-          </div>
+          <VigilLoader variant="section" label="Loading runbooks…" />
         ) : filteredDocs.length === 0 ? (
           <div className="px-6 py-14 text-center">
             <p className="text-[14px] font-medium text-[#d8dae0]">

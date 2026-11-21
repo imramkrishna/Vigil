@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Check, Plus } from "lucide-react";
 import { listIncidents, type IncidentRow } from "@/lib/api";
+import { VigilLoader } from "./VigilLoader";
 import type { Hypothesis } from "../types/vigil";
 
 const STEPS = [
@@ -122,8 +123,8 @@ export function IncidentRoomView({
 
   if (loading && !activeIncident) {
     return (
-      <div className="dash-card py-14 text-center text-[13.5px] text-[#8a8c95]">
-        Loading incidents…
+      <div className="dash-card">
+        <VigilLoader variant="section" label="Loading incidents…" />
       </div>
     );
   }

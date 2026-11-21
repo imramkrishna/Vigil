@@ -31,6 +31,7 @@ import { ApprovalsInboxView } from "@/components/ApprovalsInboxView";
 import { PostmortemEditorView } from "@/components/PostmortemEditorView";
 import { DocsAdminAndOpsView } from "@/components/DocsAdminAndOpsView";
 import { SettingsView } from "@/components/SettingsView";
+import { VigilLoader } from "@/components/VigilLoader";
 import {
   createIncident,
   getMe,
@@ -582,9 +583,11 @@ function DashboardContent() {
 
   if (!authChecked || !user) {
     return (
-      <div className="dash-surface flex h-screen w-full items-center justify-center bg-[#17181b] text-[13px] text-[#8a8c95]">
-        Loading workspace…
-      </div>
+      <VigilLoader
+        variant="fullscreen"
+        label="Loading workspace…"
+        className="dash-surface h-screen bg-[#17181b]"
+      />
     );
   }
 
@@ -825,7 +828,15 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#17181b]" />}>
+    <Suspense
+      fallback={
+        <VigilLoader
+          variant="fullscreen"
+          label="Loading workspace…"
+          className="bg-[#17181b]"
+        />
+      }
+    >
       <DashboardContent />
     </Suspense>
   );

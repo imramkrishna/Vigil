@@ -27,6 +27,7 @@ import { PostmortemArtifactCard } from "./PostmortemArtifactCard";
 import { EvidenceDrawer } from "./EvidenceDrawer";
 import { MarkdownProse } from "./MarkdownProse";
 import { ServicePlatformModal } from "../ops/ServicePlatformModal";
+import { VigilLoader } from "../VigilLoader";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -669,26 +670,17 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
                 })}
 
                 {isGenerating && (
-                  <div className="dash-fade flex items-center gap-3.5">
-                    <div className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] sm:flex">
-                      <Image
-                        src="/vigil.svg"
-                        alt="Vigil"
-                        width={16}
-                        height={16}
-                        className="h-4 w-4 object-contain"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 text-[13.5px] text-[#9b9da6]">
-                      <span className="h-2 w-2 rounded-full bg-[#e56b4e] animate-pulse" />
-                      <span>
-                        {mode === "incident"
+                  <div className="dash-fade py-1">
+                    <VigilLoader
+                      variant="inline"
+                      label={
+                        mode === "incident"
                           ? "Investigating telemetry & runbooks…"
                           : mode === "postmortem"
                             ? "Drafting postmortem…"
-                            : "Thinking…"}
-                      </span>
-                    </div>
+                            : "Thinking…"
+                      }
+                    />
                   </div>
                 )}
 

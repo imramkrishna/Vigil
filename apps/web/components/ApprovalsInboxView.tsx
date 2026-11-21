@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import { decideApproval, listApprovals, type ApprovalRow } from "@/lib/api";
+import { VigilLoader } from "./VigilLoader";
 
 interface ApprovalItem {
   id: string;
@@ -178,8 +179,8 @@ export function ApprovalsInboxView({
       )}
 
       {loading ? (
-        <div className="dash-card py-14 text-center text-[13.5px] text-[#8a8c95]">
-          Loading approvals…
+        <div className="dash-card">
+          <VigilLoader variant="section" label="Loading approvals…" />
         </div>
       ) : filtered.length === 0 ? (
         <div className="dash-card py-14 text-center">

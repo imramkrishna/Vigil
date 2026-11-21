@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import type { ActionItem } from "../types/vigil";
 import { MarkdownProse } from "./chat/MarkdownProse";
+import { VigilLoader } from "./VigilLoader";
 
 export function PostmortemEditorView() {
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
@@ -90,8 +91,8 @@ export function PostmortemEditorView() {
 
   if (loading) {
     return (
-      <div className="dash-card py-14 text-center text-[13.5px] text-[#8a8c95]">
-        Loading incidents…
+      <div className="dash-card">
+        <VigilLoader variant="section" label="Loading incidents…" />
       </div>
     );
   }

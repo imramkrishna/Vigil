@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuroraBackground } from "@/components/AuroraBackground";
+import { VigilLoader } from "@/components/VigilLoader";
 import { getMe, signInWithGitHub, signUpEmail } from "@/lib/api";
 
 export default function SignupPage() {
@@ -69,9 +70,11 @@ export default function SignupPage() {
     return (
       <div className="relative flex min-h-screen w-full items-center justify-center bg-[#07080a] text-white">
         <AuroraBackground />
-        <div className="relative z-10 text-[13px] text-[#9c9c9d]">
-          Checking session…
-        </div>
+        <VigilLoader
+          variant="fullscreen"
+          label="Checking session…"
+          className="relative z-10 bg-transparent"
+        />
       </div>
     );
   }
