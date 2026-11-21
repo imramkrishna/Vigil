@@ -28,25 +28,29 @@ import { EvidenceDrawer } from "./EvidenceDrawer";
 import { MarkdownProse } from "./MarkdownProse";
 import { ServicePlatformModal } from "../ops/ServicePlatformModal";
 import { VigilLoader } from "../VigilLoader";
+import { createChat } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 interface VigilCopilotChatProps {
+  initialConversationId?: string | null;
   initialThreadId?: string;
   initialTurns?: ChatTurn[];
   initialMode?: Mode;
+  loadingThread?: boolean;
   embedded?: boolean;
   resetSignal?: number;
   sidebarToggle?: React.ReactNode;
   historyCount?: number;
   onOpenHistory?: () => void;
   onNewChat?: () => void;
-  onTurnsChange?: (
-    threadId: string,
-    turns: ChatTurn[],
-    mode: Mode,
-    replacedThreadId?: string
-  ) => void;
+  onConversationSync?: (params: {
+    conversationId: string;
+    threadId: string;
+    turns: ChatTurn[];
+    mode: Mode;
+    title?: string;
+  }) => void;
   onSendMessage?: (turn: ChatTurn) => void;
   onApprovalDecision?: (approvalId: string, decision: "approved" | "rejected") => void;
   onServiceRegistered?: (service: ServiceRegistrationPayload) => void;
@@ -84,21 +88,26 @@ const STARTER_PROMPTS = [
 ];
 
 export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
-  initialThreadId = "vigil_thr_981a2f",
+  initialConversationId = null,
+  initialThreadId = "",
   initialTurns = [],
   initialMode = "ask",
+  loadingThread = false,
   embedded = false,
   resetSignal = 0,
   sidebarToggle,
   historyCount = 0,
   onOpenHistory,
   onNewChat,
-  onTurnsChange,
+  onConversationSync,
   onSendMessage,
   onApprovalDecision,
   onServiceRegistered,
   onExportZip,
 }) => {
+  const [conversationId, setConversationId] = useState<string | null>(
+    initialConversationId
+  );
   const [threadId, setThreadId] = useState(initialThreadId);
   const [mode, setMode] = useState<Mode>(initialMode);
   const [severity, setSeverity] = useState<Severity>("SEV-1");
@@ -111,13 +120,13 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
   const [liveDeployDiffs, setLiveDeployDiffs] = useState<
     Array<{ commit: string; author: string; message: string; diffStat: string }>
   >([]);
-  const prevThreadIdRef = useRef<string>(initialThreadId);
 
   const lastResetRef = useRef(resetSignal);
   useEffect(() => {
     if (resetSignal !== lastResetRef.current) {
       lastResetRef.current = resetSignal;
-      setThreadId(`vigil_thr_${Math.random().toString(36).substring(2, 9)}`);
+      setConversationId(null);
+      setThreadId("");
       setTurns([]);
       setIsGenerating(false);
       setMode("ask");
@@ -154,16 +163,6 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, isGenerating]);
 
-  useEffect(() => {
-    if (turns.length === 0) return;
-    const replacedId =
-      prevThreadIdRef.current !== threadId
-        ? prevThreadIdRef.current
-        : undefined;
-    prevThreadIdRef.current = threadId;
-    onTurnsChange?.(threadId, turns, mode, replacedId);
-  }, [threadId, turns, mode, onTurnsChange]);
-
   const allCitations: Citation[] = React.useMemo(() => {
     const list: Citation[] = [];
     turns.forEach((t) => {
@@ -195,9 +194,8 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
       onNewChat();
       return;
     }
-    const newId = `vigil_thr_${Math.random().toString(36).substring(2, 9)}`;
-    prevThreadIdRef.current = newId;
-    setThreadId(newId);
+    setConversationId(null);
+    setThreadId("");
     setTurns([]);
     setIsGenerating(false);
   };
@@ -279,22 +277,48 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
       createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    setTurns((prev) => [...prev, userTurn]);
+    const nextWithUser = [...turns, userTurn];
+    setTurns(nextWithUser);
     setIsGenerating(true);
 
     try {
+      // Ensure a persistent conversation row exists in Postgres as soon as a conversation starts
+      let activeConvId = conversationId;
+      let activeThreadId = threadId;
+      if (!activeConvId) {
+        const created = await createChat({ mode: activeMode });
+        activeConvId = created.id;
+        activeThreadId = created.threadId;
+        setConversationId(created.id);
+        setThreadId(created.threadId);
+        onConversationSync?.({
+          conversationId: created.id,
+          threadId: created.threadId,
+          turns: nextWithUser,
+          mode: activeMode,
+          title: created.title,
+        });
+      }
+
       if (activeMode === "ask") {
         const res = await fetch(`${API_BASE}/api/ask`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ query: content, threadId }),
+          body: JSON.stringify({
+            query: content,
+            conversationId: activeConvId,
+            threadId: activeThreadId || undefined,
+          }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           throw new Error(data?.error || `Request failed (${res.status})`);
         }
-        if (data.threadId) setThreadId(data.threadId);
+        const resolvedConvId = data.conversationId || activeConvId;
+        const resolvedThreadId = data.threadId || activeThreadId;
+        if (resolvedConvId) setConversationId(resolvedConvId);
+        if (resolvedThreadId) setThreadId(resolvedThreadId);
         const liveTurn: ChatTurn = {
           id: `asst_${Date.now()}`,
           role: "assistant",
@@ -309,7 +333,17 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
           grounded: data.grounded ?? true,
           timeline: data.timeline || [],
         };
-        setTurns((prev) => [...prev, liveTurn]);
+        const updatedTurns = [...nextWithUser, liveTurn];
+        setTurns(updatedTurns);
+        if (resolvedConvId) {
+          onConversationSync?.({
+            conversationId: resolvedConvId,
+            threadId: resolvedThreadId,
+            turns: updatedTurns,
+            mode: "ask",
+            title: data.title,
+          });
+        }
         onSendMessage?.(liveTurn);
       } else if (activeMode === "incident") {
         const res = await fetch(`${API_BASE}/api/incidents`, {
@@ -320,13 +354,17 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
             title: content.slice(0, 100),
             severity: activeSeverity,
             symptomSummary: content,
+            conversationId: activeConvId,
           }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           throw new Error(data?.error || `Request failed (${res.status})`);
         }
-        if (data.threadId) setThreadId(data.threadId);
+        const resolvedConvId = data.conversationId || activeConvId;
+        const resolvedThreadId = data.threadId || activeThreadId;
+        if (resolvedConvId) setConversationId(resolvedConvId);
+        if (resolvedThreadId) setThreadId(resolvedThreadId);
         const liveTurn: ChatTurn = {
           id: `asst_${Date.now()}`,
           role: "assistant",
@@ -345,7 +383,17 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
           approvalId: data.approvalId ?? data.incident?.id,
           approvalDecision: data.proposedAction ? "pending" : undefined,
         };
-        setTurns((prev) => [...prev, liveTurn]);
+        const updatedTurns = [...nextWithUser, liveTurn];
+        setTurns(updatedTurns);
+        if (resolvedConvId) {
+          onConversationSync?.({
+            conversationId: resolvedConvId,
+            threadId: resolvedThreadId,
+            turns: updatedTurns,
+            mode: "incident",
+            title: data.title,
+          });
+        }
         onSendMessage?.(liveTurn);
       } else if (activeMode === "postmortem") {
         const listRes = await fetch(`${API_BASE}/api/incidents`, {
@@ -361,13 +409,24 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
         }
         const pmRes = await fetch(
           `${API_BASE}/api/incidents/${latestIncident.id}/postmortem`,
-          { method: "POST", credentials: "include" }
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              conversationId: activeConvId,
+              query: content,
+            }),
+          }
         );
         const pmData = await pmRes.json().catch(() => ({}));
         if (!pmRes.ok) {
           throw new Error(pmData?.error || `Postmortem generation failed (${pmRes.status})`);
         }
-        if (pmData.threadId) setThreadId(pmData.threadId);
+        const resolvedConvId = pmData.conversationId || activeConvId;
+        const resolvedThreadId = pmData.threadId || activeThreadId;
+        if (resolvedConvId) setConversationId(resolvedConvId);
+        if (resolvedThreadId) setThreadId(resolvedThreadId);
         const liveTurn: ChatTurn = {
           id: `asst_${Date.now()}`,
           role: "assistant",
@@ -383,7 +442,17 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
           postmortemMarkdown: pmData.postmortemMarkdown,
           actionItems: pmData.actionItems || [],
         };
-        setTurns((prev) => [...prev, liveTurn]);
+        const updatedTurns = [...nextWithUser, liveTurn];
+        setTurns(updatedTurns);
+        if (resolvedConvId) {
+          onConversationSync?.({
+            conversationId: resolvedConvId,
+            threadId: resolvedThreadId,
+            turns: updatedTurns,
+            mode: "postmortem",
+            title: pmData.title,
+          });
+        }
         onSendMessage?.(liveTurn);
       }
     } catch (err) {
@@ -517,7 +586,11 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
           </div>
         </header>
 
-        {isEmpty ? (
+        {loadingThread ? (
+          <main className="flex flex-1 items-center justify-center">
+            <VigilLoader variant="section" label="Loading conversation…" />
+          </main>
+        ) : isEmpty ? (
           /* Centered Claude/ChatGPT Empty State */
           <main className="dash-scroll flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-16 sm:px-6">
             <div className="dash-fade w-full max-w-[740px]">

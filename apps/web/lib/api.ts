@@ -63,6 +63,42 @@ export interface ApprovalRow {
   createdAt: string;
 }
 
+export interface ConversationRow {
+  id: string;
+  orgId: string;
+  userId: string;
+  threadId: string;
+  title: string;
+  mode: "ask" | "incident" | "postmortem";
+  incidentId?: string | null;
+  messageCount: number;
+  lastMessagePreview?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationMessageRow {
+  id: string;
+  orgId: string;
+  conversationId: string;
+  role: "user" | "assistant";
+  mode: "ask" | "incident" | "postmortem";
+  content: string;
+  confidence?: "high" | "medium" | "low" | null;
+  grounded?: boolean | null;
+  metadata?: {
+    timeline?: string[];
+    citations?: Citation[];
+    hypotheses?: Hypothesis[];
+    proposedAction?: ProposedAction | null;
+    approvalId?: string | null;
+    approvalDecision?: "pending" | "approved" | "rejected" | null;
+    postmortemMarkdown?: string;
+    actionItems?: ActionItem[];
+  } | null;
+  createdAt: string;
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -303,8 +339,13 @@ export async function decideApproval(
   });
 }
 
-export async function askCopilot(query: string, threadId?: string) {
+export async function askCopilot(
+  query: string,
+  opts?: { conversationId?: string; threadId?: string }
+) {
   return apiFetch<{
+    conversationId: string;
+    title: string;
     answer: string;
     citations: Citation[];
     confidence: "high" | "medium" | "low";
@@ -313,6 +354,63 @@ export async function askCopilot(query: string, threadId?: string) {
     threadId: string;
   }>("/api/ask", {
     method: "POST",
-    body: JSON.stringify({ query, threadId }),
+    body: JSON.stringify({
+      query,
+      conversationId: opts?.conversationId,
+      threadId: opts?.threadId,
+    }),
   });
+}
+
+// ─── Conversations & Chat History ────────────────────────────────────
+
+export async function listChats(): Promise<ConversationRow[]> {
+  const res = await apiFetch<{ conversations: ConversationRow[] }>("/api/chats");
+  return res.conversations ?? [];
+}
+
+export async function createChat(params?: {
+  mode?: "ask" | "incident" | "postmortem";
+  title?: string;
+}): Promise<ConversationRow> {
+  const res = await apiFetch<{ conversation: ConversationRow }>("/api/chats", {
+    method: "POST",
+    body: JSON.stringify(params ?? {}),
+  });
+  return res.conversation;
+}
+
+export async function getChat(conversationId: string): Promise<{
+  conversation: ConversationRow;
+  messages: ConversationMessageRow[];
+}> {
+  return apiFetch<{
+    conversation: ConversationRow;
+    messages: ConversationMessageRow[];
+  }>(`/api/chats/${conversationId}`);
+}
+
+export async function renameChat(
+  conversationId: string,
+  title: string
+): Promise<ConversationRow> {
+  const res = await apiFetch<{ conversation: ConversationRow }>(
+    `/api/chats/${conversationId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }
+  );
+  return res.conversation;
+}
+
+export async function deleteChat(conversationId: string) {
+  return apiFetch<{ deleted: boolean; id: string }>(
+    `/api/chats/${conversationId}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function clearChats() {
+  return apiFetch<{ cleared: boolean }>("/api/chats", { method: "DELETE" });
 }

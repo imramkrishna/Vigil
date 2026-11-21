@@ -3,6 +3,7 @@ import { Command } from "@langchain/langgraph";
 import {
   decideApproval,
   listApprovals,
+  updateMessageApprovalDecision,
   type ApprovalDecision,
 } from "@vigil/core";
 import { getVigilGraph } from "@vigil/graphs";
@@ -49,6 +50,12 @@ export async function decideApprovalController(req: Request, res: Response) {
       res.status(404).json({ error: "Approval not found." });
       return;
     }
+
+    await updateMessageApprovalDecision({
+      orgId,
+      approvalId,
+      decision,
+    }).catch(() => {});
 
     let executionResult: Record<string, unknown> | null = null;
     let answer = "";

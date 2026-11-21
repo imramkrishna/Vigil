@@ -1,8 +1,11 @@
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import {
+  appendConversationMessage,
   createIncident,
+  generateAndUpdateChatTitle,
   getIncidentById,
+  getOrCreateConversation,
   listApprovalsForIncident,
   listIncidents,
   SEVERITIES,
@@ -47,7 +50,7 @@ export async function getIncidentByIdController(req: Request, res: Response) {
   }
 }
 
-// POST /api/incidents — Create incident & run Incident Investigation graph
+// POST /api/incidents — Create incident, link/persist conversation, and run Incident Investigation graph
 export async function createIncidentController(req: Request, res: Response) {
   try {
     const {
@@ -55,11 +58,13 @@ export async function createIncidentController(req: Request, res: Response) {
       severity = "SEV-2",
       query,
       symptomSummary,
+      conversationId: incomingConversationId,
     } = req.body as {
       title?: string;
       severity?: Severity;
       query?: string;
       symptomSummary?: string;
+      conversationId?: string;
     };
 
     if (!title || !title.trim()) {
@@ -75,6 +80,7 @@ export async function createIncidentController(req: Request, res: Response) {
     }
 
     const { orgId, userId } = req.auth!;
+    const cleanPrompt = (query ?? symptomSummary ?? title).trim();
     const threadId = `inc-${crypto.randomUUID()}`;
 
     const incident = await createIncident({
@@ -85,6 +91,23 @@ export async function createIncidentController(req: Request, res: Response) {
       openedBy: userId,
     });
 
+    const conversation = await getOrCreateConversation({
+      orgId,
+      userId,
+      conversationId: incomingConversationId,
+      threadId,
+      mode: "incident",
+      incidentId: incident.id,
+    });
+
+    await appendConversationMessage({
+      orgId,
+      conversationId: conversation.id,
+      role: "user",
+      mode: "incident",
+      content: cleanPrompt,
+    });
+
     const graph = await getVigilGraph();
     const state = await graph.invoke(
       {
@@ -93,21 +116,64 @@ export async function createIncidentController(req: Request, res: Response) {
         mode: "incident",
         incidentId: incident.id,
         severity,
-        query: (query ?? symptomSummary ?? title).trim(),
+        query: cleanPrompt,
       },
       {
         configurable: { thread_id: threadId },
       }
     );
 
-    const updatedIncident = await getIncidentById(orgId, incident.id);
+    const [updatedIncident, incidentApprovals] = await Promise.all([
+      getIncidentById(orgId, incident.id),
+      listApprovalsForIncident(orgId, incident.id),
+    ]);
+
+    const pendingApproval = incidentApprovals.find(
+      (a) => a.decision === "pending"
+    );
+    const approvalId = pendingApproval?.id ?? null;
+    const answer =
+      state.answer || "Incident investigation paused at approval gate.";
+
+    await appendConversationMessage({
+      orgId,
+      conversationId: conversation.id,
+      role: "assistant",
+      mode: "incident",
+      content: answer,
+      confidence: state.confidence,
+      grounded: true,
+      metadata: {
+        citations: state.citations,
+        timeline: state.timeline,
+        hypotheses: state.hypotheses,
+        proposedAction: state.proposedAction,
+        approvalId,
+        approvalDecision: state.proposedAction ? "pending" : null,
+      },
+    });
+
+    let chatTitle = conversation.title;
+    if (!chatTitle || chatTitle === "New chat") {
+      chatTitle = await generateAndUpdateChatTitle({
+        orgId,
+        conversationId: conversation.id,
+        threadId,
+        userMessage: cleanPrompt,
+        assistantResponse: answer,
+        mode: "incident",
+      });
+    }
 
     res.status(201).json({
       incident: updatedIncident ?? incident,
+      conversationId: conversation.id,
+      title: chatTitle,
+      approvalId,
       threadId,
       hypotheses: state.hypotheses,
       proposedAction: state.proposedAction,
-      answer: state.answer,
+      answer,
       citations: state.citations,
       confidence: state.confidence,
       timeline: state.timeline,
@@ -127,8 +193,13 @@ export async function generatePostmortemController(
   res: Response
 ) {
   try {
-    const { orgId } = req.auth!;
+    const { orgId, userId } = req.auth!;
     const incidentId = String(req.params.id ?? "");
+    const { conversationId: incomingConversationId, query } = (req.body ??
+      {}) as {
+      conversationId?: string;
+      query?: string;
+    };
 
     const incident = await getIncidentById(orgId, incidentId);
     if (!incident) {
@@ -150,8 +221,62 @@ export async function generatePostmortemController(
       }
     );
 
+    let conversationId: string | null = null;
+    let chatTitle: string | null = null;
+
+    if (incomingConversationId || query) {
+      const conversation = await getOrCreateConversation({
+        orgId,
+        userId,
+        conversationId: incomingConversationId,
+        mode: "postmortem",
+        incidentId: incident.id,
+      });
+      conversationId = conversation.id;
+
+      if (query?.trim()) {
+        await appendConversationMessage({
+          orgId,
+          conversationId: conversation.id,
+          role: "user",
+          mode: "postmortem",
+          content: query.trim(),
+        });
+      }
+
+      const summaryText = `Generated blameless postmortem for **${incident.title}** (${incident.severity}).`;
+      await appendConversationMessage({
+        orgId,
+        conversationId: conversation.id,
+        role: "assistant",
+        mode: "postmortem",
+        content: summaryText,
+        confidence: "high",
+        grounded: true,
+        metadata: {
+          timeline: state.timeline,
+          postmortemMarkdown: state.postmortemMarkdown,
+          actionItems: state.actionItems,
+        },
+      });
+
+      chatTitle = conversation.title;
+      if (!chatTitle || chatTitle === "New chat") {
+        chatTitle = await generateAndUpdateChatTitle({
+          orgId,
+          conversationId: conversation.id,
+          threadId: conversation.threadId,
+          userMessage: query?.trim() || `Postmortem: ${incident.title}`,
+          assistantResponse: summaryText,
+          mode: "postmortem",
+        });
+      }
+    }
+
     res.json({
       incidentId: incident.id,
+      conversationId,
+      title: chatTitle,
       threadId: incident.threadId,
       postmortemMarkdown: state.postmortemMarkdown,
       actionItems: state.actionItems,

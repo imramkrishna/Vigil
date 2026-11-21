@@ -1,12 +1,21 @@
-import crypto from "node:crypto";
 import type { Request, Response } from "express";
+import {
+  appendConversationMessage,
+  generateAndUpdateChatTitle,
+  getOrCreateConversation,
+} from "@vigil/core";
 import { getVigilGraph } from "@vigil/graphs";
 
-// POST /api/ask — Run Ask Copilot graph
+// POST /api/ask — Persist user & assistant messages, auto-generate title, and run Ask Copilot graph
 export async function askCopilotController(req: Request, res: Response) {
   try {
-    const { query, threadId: incomingThreadId } = req.body as {
+    const {
+      query,
+      conversationId: incomingConversationId,
+      threadId: incomingThreadId,
+    } = req.body as {
       query?: string;
+      conversationId?: string;
       threadId?: string;
     };
 
@@ -15,25 +24,71 @@ export async function askCopilotController(req: Request, res: Response) {
       return;
     }
 
-    const { orgId } = req.auth!;
-    const threadId = incomingThreadId?.trim() || `ask-${crypto.randomUUID()}`;
+    const cleanQuery = query.trim();
+    const { orgId, userId } = req.auth!;
+
+    const conversation = await getOrCreateConversation({
+      orgId,
+      userId,
+      conversationId: incomingConversationId,
+      threadId: incomingThreadId,
+      mode: "ask",
+    });
+
+    await appendConversationMessage({
+      orgId,
+      conversationId: conversation.id,
+      role: "user",
+      mode: "ask",
+      content: cleanQuery,
+    });
 
     const graph = await getVigilGraph();
     const state = await graph.invoke(
       {
         orgId,
-        threadId,
+        threadId: conversation.threadId,
         mode: "ask",
-        query: query.trim(),
+        query: cleanQuery,
       },
       {
-        configurable: { thread_id: threadId },
+        configurable: { thread_id: conversation.threadId },
       }
     );
 
+    const answer = state.answer || "Completed query.";
+
+    await appendConversationMessage({
+      orgId,
+      conversationId: conversation.id,
+      role: "assistant",
+      mode: "ask",
+      content: answer,
+      confidence: state.confidence,
+      grounded: state.grounded,
+      metadata: {
+        citations: state.citations,
+        timeline: state.timeline,
+      },
+    });
+
+    let title = conversation.title;
+    if (!title || title === "New chat") {
+      title = await generateAndUpdateChatTitle({
+        orgId,
+        conversationId: conversation.id,
+        threadId: conversation.threadId,
+        userMessage: cleanQuery,
+        assistantResponse: answer,
+        mode: "ask",
+      });
+    }
+
     res.json({
-      threadId,
-      answer: state.answer,
+      conversationId: conversation.id,
+      title,
+      threadId: conversation.threadId,
+      answer,
       citations: state.citations,
       confidence: state.confidence,
       grounded: state.grounded,

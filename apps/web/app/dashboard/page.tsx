@@ -42,7 +42,10 @@ import {
 import {
   clearChatThreads,
   deleteChatThread,
+  loadChatThreadMessages,
+  loadChatThreads,
   renameChatThread,
+  resetChatHistoryCache,
   upsertChatThread,
   useChatHistory,
   type ChatThread,
@@ -143,12 +146,15 @@ function DashboardContent() {
 
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const historyScope = user?.userId || "local";
-  const threads = useChatHistory(historyScope);
+  const threads = useChatHistory();
 
-  const [activeChatId, setActiveChatId] = useState<string>("vigil_thr_981a2f");
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    null
+  );
+  const [activeChatId, setActiveChatId] = useState<string>("");
   const [activeInitialTurns, setActiveInitialTurns] = useState<ChatTurn[]>([]);
   const [activeInitialMode, setActiveInitialMode] = useState<Mode>("ask");
+  const [loadingThread, setLoadingThread] = useState(false);
   const [chatInstanceKey, setChatInstanceKey] = useState(0);
 
   const [showNew, setShowNew] = useState(false);
@@ -179,6 +185,7 @@ function DashboardContent() {
       setUser(u);
       setAuthChecked(true);
       refreshPendingApprovals();
+      loadChatThreads();
     });
     return () => {
       active = false;
@@ -199,23 +206,25 @@ function DashboardContent() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [showNew]);
 
-  const handleTurnsChange = useCallback(
-    (
-      threadId: string,
-      turns: ChatTurn[],
-      mode: Mode,
-      replacedThreadId?: string
-    ) => {
-      if (turns.length === 0) return;
-      setActiveChatId(threadId);
-      upsertChatThread(historyScope, {
-        id: threadId,
-        turns,
-        mode,
-        replacedId: replacedThreadId,
+  const handleConversationSync = useCallback(
+    (params: {
+      conversationId: string;
+      threadId: string;
+      turns: ChatTurn[];
+      mode: Mode;
+      title?: string;
+    }) => {
+      setActiveConversationId(params.conversationId);
+      setActiveChatId(params.threadId);
+      upsertChatThread({
+        id: params.conversationId,
+        threadId: params.threadId,
+        turns: params.turns,
+        mode: params.mode,
+        title: params.title,
       });
     },
-    [historyScope]
+    []
   );
 
   const handleSelectTab = (next: TabId) => {
@@ -224,53 +233,72 @@ function DashboardContent() {
   };
 
   const handleNewChat = useCallback(() => {
-    const freshId = makeThreadId();
-    setActiveChatId(freshId);
+    setActiveConversationId(null);
+    setActiveChatId("");
     setActiveInitialTurns([]);
     setActiveInitialMode("ask");
+    setLoadingThread(false);
     setChatInstanceKey((k) => k + 1);
     setTab("ask");
     setMobileMenuOpen(false);
   }, []);
 
-  const handleSelectThread = useCallback((thread: ChatThread) => {
-    setActiveChatId(thread.id);
-    setActiveInitialTurns(thread.turns);
+  const handleSelectThread = useCallback(async (thread: ChatThread) => {
+    setActiveConversationId(thread.id);
+    setActiveChatId(thread.threadId);
     setActiveInitialMode(thread.mode);
-    setChatInstanceKey((k) => k + 1);
     setTab("ask");
     setMobileMenuOpen(false);
+
+    if (thread.messagesLoaded) {
+      setActiveInitialTurns(thread.turns);
+      setLoadingThread(false);
+      setChatInstanceKey((k) => k + 1);
+      return;
+    }
+
+    setLoadingThread(true);
+    setActiveInitialTurns([]);
+    setChatInstanceKey((k) => k + 1);
+    try {
+      const loaded = await loadChatThreadMessages(thread.id);
+      if (loaded) {
+        setActiveInitialTurns(loaded.turns);
+        setActiveChatId(loaded.threadId);
+        setActiveInitialMode(loaded.mode);
+        setChatInstanceKey((k) => k + 1);
+      }
+    } finally {
+      setLoadingThread(false);
+    }
   }, []);
 
-  const handleRenameThread = useCallback(
-    (id: string, nextTitle: string) => {
-      renameChatThread(historyScope, id, nextTitle);
-    },
-    [historyScope]
-  );
+  const handleRenameThread = useCallback((id: string, nextTitle: string) => {
+    void renameChatThread(id, nextTitle);
+  }, []);
 
   const handleDeleteThread = useCallback(
     (id: string) => {
-      deleteChatThread(historyScope, id);
-      if (activeChatId === id) {
-        const freshId = makeThreadId();
-        setActiveChatId(freshId);
+      void deleteChatThread(id);
+      if (activeConversationId === id) {
+        setActiveConversationId(null);
+        setActiveChatId("");
         setActiveInitialTurns([]);
         setActiveInitialMode("ask");
         setChatInstanceKey((k) => k + 1);
       }
     },
-    [historyScope, activeChatId]
+    [activeConversationId]
   );
 
   const handleClearHistory = useCallback(() => {
-    clearChatThreads(historyScope);
-    const freshId = makeThreadId();
-    setActiveChatId(freshId);
+    void clearChatThreads();
+    setActiveConversationId(null);
+    setActiveChatId("");
     setActiveInitialTurns([]);
     setActiveInitialMode("ask");
     setChatInstanceKey((k) => k + 1);
-  }, [historyScope]);
+  }, []);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -489,7 +517,7 @@ function DashboardContent() {
           ) : (
             <div className="space-y-0.5">
               {recentSidebarThreads.map((t) => {
-                const isCurrent = tab === "ask" && activeChatId === t.id;
+                const isCurrent = tab === "ask" && activeConversationId === t.id;
                 return (
                   <div
                     key={t.id}
@@ -567,8 +595,9 @@ function DashboardContent() {
           <button
             type="button"
             onClick={async () => {
+              resetChatHistoryCache();
               await signOut();
-              router.push("/login");
+              router.replace("/login");
             }}
             aria-label="Sign out"
             title="Sign out"
@@ -626,14 +655,16 @@ function DashboardContent() {
         >
           <AskCopilotView
             key={chatInstanceKey}
+            initialConversationId={activeConversationId}
             initialThreadId={activeChatId}
             initialTurns={activeInitialTurns}
             initialMode={activeInitialMode}
+            loadingThread={loadingThread}
             sidebarToggle={sidebarToggleButton}
             historyCount={threads.length}
             onOpenHistory={() => handleSelectTab("history")}
             onNewChat={handleNewChat}
-            onTurnsChange={handleTurnsChange}
+            onConversationSync={handleConversationSync}
             onApprovalDecision={() => refreshPendingApprovals()}
           />
         </div>
@@ -679,7 +710,7 @@ function DashboardContent() {
                 {tab === "history" && (
                   <ChatHistoryView
                     threads={threads}
-                    activeThreadId={activeChatId}
+                    activeThreadId={activeConversationId ?? undefined}
                     onSelectThread={handleSelectThread}
                     onNewChat={handleNewChat}
                     onRenameThread={handleRenameThread}

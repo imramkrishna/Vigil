@@ -85,6 +85,7 @@ export function ChatHistoryView({
       if (modeFilter !== "all" && t.mode !== modeFilter) return false;
       if (!q) return true;
       if (t.title.toLowerCase().includes(q)) return true;
+      if (t.lastMessagePreview?.toLowerCase().includes(q)) return true;
       return t.turns.some((turn) => turn.content.toLowerCase().includes(q));
     });
   }, [threads, query, modeFilter]);
@@ -264,7 +265,8 @@ export function ChatHistoryView({
                   const lastTurn = thread.turns[thread.turns.length - 1];
                   const preview = lastTurn
                     ? stripMarkdownPreview(lastTurn.content)
-                    : "";
+                    : thread.lastMessagePreview || "";
+                  const msgCount = thread.messageCount || thread.turns.length;
                   const isEditing = editingId === thread.id;
                   const isActive = activeThreadId === thread.id;
 
@@ -353,8 +355,7 @@ export function ChatHistoryView({
                               {formatRelativeTime(thread.updatedAt)}
                             </div>
                             <div className="font-mono-only text-[11px] text-[#666973]">
-                              {thread.turns.length}{" "}
-                              {thread.turns.length === 1 ? "msg" : "msgs"}
+                              {msgCount} {msgCount === 1 ? "msg" : "msgs"}
                             </div>
                           </div>
 

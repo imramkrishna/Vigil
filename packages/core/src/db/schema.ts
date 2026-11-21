@@ -497,3 +497,5 @@ export type Approval = typeof approvals.$inferSelect;
 export type NewApproval = typeof approvals.$inferInsert;
 export type ActionLogEntry = typeof actionLog.$inferSelect;
 export type ModelUsage = typeof modelUsage.$inferSelect;
+
+export * from "./chat-schema";
