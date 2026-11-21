@@ -13,43 +13,6 @@ const STEPS = [
   { label: "Resolved", key: "resolved" },
 ];
 
-const EVIDENCE: Record<string, { source: string; text: string }> = {
-  ev_01: {
-    source: "Deploy history",
-    text: "Deploy 7f3a91c raised DB_POOL_MAX from 40 to 120 across 4 replicas (480 connections, limit 300).",
-  },
-  ev_02: {
-    source: "Runbook: payments",
-    text: "When pool exhaustion appears with pgBouncer above 85%, check recent pool changes and roll back the deploy.",
-  },
-  ev_03: {
-    source: "Past incident INC-1812",
-    text: "Same failure 92 days ago after replica scaling. Fixed by rollback in 4 minutes.",
-  },
-};
-
-const DEFAULT_CAUSES = [
-  {
-    title: "Deploy 7f3a91c exceeded the database connection limit",
-    confidence: 94,
-    evidence: ["ev_01", "ev_02", "ev_03"],
-    action: "Roll back payments-service",
-  },
-  {
-    title: "Lock contention in ledger-worker",
-    confidence: 21,
-    evidence: ["ev_01"],
-    action: "Keep monitoring",
-  },
-];
-
-const DEFAULT_TIMELINE = [
-  { time: "21:42", text: "Alert classified as SEV-1." },
-  { time: "21:42", text: "Checked runbooks, metrics, and past incidents." },
-  { time: "21:42", text: "Ranked 2 likely causes." },
-  { time: "21:42", text: "Waiting for approval on 2 actions." },
-];
-
 export interface LiveIncidentData {
   incident: IncidentRow;
   hypotheses?: Hypothesis[];
@@ -67,55 +30,82 @@ export function IncidentRoomView({
   latestCreated?: LiveIncidentData | null;
 }) {
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [openEv, setOpenEv] = useState("ev_01");
   const [note, setNote] = useState("");
   const [notes, setNotes] = useState<Array<{ time: string; text: string }>>([]);
 
   useEffect(() => {
+    let active = true;
     listIncidents()
       .then((rows) => {
-        if (rows.length > 0) {
-          setIncidents(rows);
+        if (!active) return;
+        setIncidents(rows);
+        setError(null);
+        if (latestCreated?.incident?.id) {
+          setSelectedId(latestCreated.incident.id);
+        } else if (rows.length > 0) {
           setSelectedId((prev) => prev ?? rows[0]!.id);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (!active) return;
+        setError(
+          err instanceof Error ? err.message : "Failed to load incidents."
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [latestCreated]);
-
-  const baseTimeline =
-    latestCreated?.timeline && latestCreated.timeline.length > 0
-      ? latestCreated.timeline.map((t) => ({
-          time: latestCreated.incident?.openedAt
-            ? new Date(latestCreated.incident.openedAt).toTimeString().slice(0, 5)
-            : "Now",
-          text: t,
-        }))
-      : DEFAULT_TIMELINE;
-
-  const timeline = [...baseTimeline, ...notes];
 
   const activeIncident =
     (latestCreated?.incident?.id === selectedId
       ? latestCreated?.incident
       : incidents.find((i) => i.id === selectedId)) ??
     latestCreated?.incident ??
-    incidents[0];
+    incidents[0] ??
+    null;
+
+  const isLatestSelected =
+    Boolean(latestCreated) &&
+    activeIncident?.id === latestCreated?.incident?.id;
+
+  const baseTimeline =
+    isLatestSelected && latestCreated?.timeline && latestCreated.timeline.length > 0
+      ? latestCreated.timeline.map((t) => ({
+          time: activeIncident?.openedAt
+            ? new Date(activeIncident.openedAt).toTimeString().slice(0, 5)
+            : "Now",
+          text: t,
+        }))
+      : activeIncident
+        ? [
+            {
+              time: new Date(activeIncident.openedAt).toTimeString().slice(0, 5),
+              text: `Incident opened (${activeIncident.severity}) — status: ${activeIncident.status.replace("_", " ")}.`,
+            },
+          ]
+        : [];
+
+  const timeline = [...baseTimeline, ...notes];
 
   const liveHypotheses =
-    latestCreated &&
-    (!selectedId || latestCreated.incident.id === selectedId) &&
-    latestCreated.hypotheses &&
+    isLatestSelected &&
+    latestCreated?.hypotheses &&
     latestCreated.hypotheses.length > 0
       ? latestCreated.hypotheses.map((h) => ({
           title: h.cause,
           confidence: Math.round(
             h.confidence <= 1 ? h.confidence * 100 : h.confidence
           ),
-          evidence: ["ev_01"],
-          action: h.evidence,
+          evidence: h.evidence,
         }))
-      : DEFAULT_CAUSES;
+      : [];
 
   const addNote = (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,14 +120,39 @@ export function IncidentRoomView({
     setNote("");
   };
 
-  const title =
-    activeIncident?.title ||
-    "Payments service is running out of database connections";
-  const severity = activeIncident?.severity || "SEV-1";
-  const shortId = activeIncident?.id
-    ? `INC-${activeIncident.id.slice(0, 6).toUpperCase()}`
-    : "INC-2048";
-  const status = activeIncident?.status || "awaiting_approval";
+  if (loading && !activeIncident) {
+    return (
+      <div className="dash-card py-14 text-center text-[13.5px] text-[#8a8c95]">
+        Loading incidents…
+      </div>
+    );
+  }
+
+  if (error && !activeIncident) {
+    return (
+      <div className="dash-card py-14 text-center">
+        <p className="text-[14px] font-medium text-rose-300">{error}</p>
+      </div>
+    );
+  }
+
+  if (!activeIncident) {
+    return (
+      <div className="dash-card py-14 text-center">
+        <p className="text-[14px] font-medium text-[#d8dae0]">
+          No incidents declared yet
+        </p>
+        <p className="mt-1 text-[13px] text-[#7c7e87]">
+          Click &ldquo;New incident&rdquo; above or switch Ask Vigil to Incident mode to start an investigation.
+        </p>
+      </div>
+    );
+  }
+
+  const title = activeIncident.title;
+  const severity = activeIncident.severity;
+  const shortId = `INC-${activeIncident.id.slice(0, 6).toUpperCase()}`;
+  const status = activeIncident.status as string;
 
   const sevStyle =
     severity === "SEV-1"
@@ -150,8 +165,8 @@ export function IncidentRoomView({
     <div className="space-y-6">
       {incidents.length > 1 && (
         <div className="dash-scroll flex items-center gap-2 overflow-x-auto pb-1">
-          {incidents.slice(0, 6).map((inc) => {
-            const active = inc.id === activeIncident?.id;
+          {incidents.slice(0, 8).map((inc) => {
+            const active = inc.id === activeIncident.id;
             return (
               <button
                 key={inc.id}
@@ -219,15 +234,16 @@ export function IncidentRoomView({
         <ol className="mt-6 grid grid-cols-2 gap-3 border-t border-white/[0.06] pt-5 sm:grid-cols-5">
           {STEPS.map((s, idx) => {
             const isResolved = status === "resolved";
+            const isMonitoring = status === "monitoring" || status === "mitigating";
             const isActive =
               (status === "awaiting_approval" && idx === 3) ||
               (status === "investigating" && idx === 1) ||
-              (status === "mitigating" && idx === 3) ||
-              (status === "resolved" && idx === 4);
+              (isMonitoring && idx === 3) ||
+              (isResolved && idx === 4);
             const isDone =
               isResolved ||
               (status === "awaiting_approval" && idx < 3) ||
-              (status === "mitigating" && idx < 3) ||
+              (isMonitoring && idx < 4) ||
               (status === "investigating" && idx < 1);
 
             return (
@@ -265,7 +281,7 @@ export function IncidentRoomView({
       </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Hypotheses & Evidence */}
+        {/* Hypotheses & Summary */}
         <div className="space-y-4 lg:col-span-7">
           <div className="dash-card overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
@@ -277,64 +293,56 @@ export function IncidentRoomView({
               </span>
             </div>
 
-            <div className="divide-y divide-white/[0.05]">
-              {liveHypotheses.map((c, i) => (
-                <div key={c.title} className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <p className="text-[14px] font-medium leading-snug text-[#ececef]">
-                      <span className="font-mono-only mr-2 text-[12px] text-[#7c7e87]">
-                        {i + 1}.
+            {liveHypotheses.length === 0 ? (
+              <div className="p-5 text-[13px] text-[#8a8c95]">
+                No ranked hypotheses attached to this incident view yet. Check Approvals or Ask Vigil for investigation details.
+              </div>
+            ) : (
+              <div className="divide-y divide-white/[0.05]">
+                {liveHypotheses.map((c, i) => (
+                  <div key={c.title} className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="text-[14px] font-medium leading-snug text-[#ececef]">
+                        <span className="font-mono-only mr-2 text-[12px] text-[#7c7e87]">
+                          {i + 1}.
+                        </span>
+                        {c.title}
+                      </p>
+                      <span className="font-mono-only shrink-0 text-[12.5px] tabular-nums text-[#b5b7be]">
+                        {c.confidence}%
                       </span>
-                      {c.title}
-                    </p>
-                    <span className="font-mono-only shrink-0 text-[12.5px] tabular-nums text-[#b5b7be]">
-                      {c.confidence}%
-                    </span>
-                  </div>
-
-                  <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-white/[0.06]">
-                    <div
-                      className={`h-full rounded-full ${
-                        c.confidence >= 70 ? "bg-[#e56b4e]" : "bg-white/25"
-                      }`}
-                      style={{ width: `${c.confidence}%` }}
-                    />
-                  </div>
-
-                  <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 text-[12px]">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {c.evidence.map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setOpenEv(id)}
-                          className={`font-mono-only cursor-pointer rounded-md px-2 py-0.5 text-[11px] transition-colors ${
-                            openEv === id
-                              ? "bg-white/[0.12] text-[#ececef]"
-                              : "bg-white/[0.04] text-[#8a8c95] hover:bg-white/[0.08] hover:text-[#ececef]"
-                          }`}
-                        >
-                          {id}
-                        </button>
-                      ))}
                     </div>
-                    <span className="truncate max-w-[300px] text-[#8a8c95]">
-                      {c.action}
-                    </span>
+
+                    <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-white/[0.06]">
+                      <div
+                        className={`h-full rounded-full ${
+                          c.confidence >= 70 ? "bg-[#e56b4e]" : "bg-white/25"
+                        }`}
+                        style={{ width: `${c.confidence}%` }}
+                      />
+                    </div>
+
+                    {c.evidence && (
+                      <p className="mt-3 text-[12.5px] leading-relaxed text-[#8a8c95]">
+                        {c.evidence}
+                      </p>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="dash-card p-5">
-            <div className="text-[12px] font-medium text-[#8a8c95]">
-              {EVIDENCE[openEv]?.source ?? "Supporting evidence"}
+          {isLatestSelected && latestCreated?.answer && (
+            <div className="dash-card p-5">
+              <div className="text-[12px] font-medium text-[#8a8c95]">
+                Investigation summary
+              </div>
+              <p className="mt-1.5 whitespace-pre-wrap text-[13.5px] leading-relaxed text-[#d8dae0]">
+                {latestCreated.answer}
+              </p>
             </div>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#d8dae0]">
-              {latestCreated?.answer || EVIDENCE[openEv]?.text}
-            </p>
-          </div>
+          )}
         </div>
 
         {/* Timeline */}
@@ -359,7 +367,10 @@ export function IncidentRoomView({
               ))}
             </ul>
 
-            <form onSubmit={addNote} className="mt-5 flex gap-2 border-t border-white/[0.06] pt-4">
+            <form
+              onSubmit={addNote}
+              className="mt-5 flex gap-2 border-t border-white/[0.06] pt-4"
+            >
               <input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}

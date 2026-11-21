@@ -149,10 +149,10 @@ export default function HomePage() {
           <span>docker compose up -d &amp;&amp; pnpm db:setup</span>
           <span className="text-white/30">·</span>
           <Link
-            href="/dashboard"
+            href="/login"
             className="text-white/85 underline decoration-white/30 underline-offset-4 transition-colors hover:text-white hover:decoration-white"
           >
-            Or try the demo workspace
+            Sign in to your workspace
           </Link>
         </div>
 
@@ -356,13 +356,13 @@ export default function HomePage() {
 
       <section className="relative z-10 mx-auto max-w-[1100px] px-4 py-24 text-center sm:px-8">
         <h2 className="text-[30px] font-semibold tracking-[-0.025em] sm:text-[36px]">
-          Try it on a sample incident.
+          Investigate incidents faster.
         </h2>
         <p className="mt-3 text-[15px] text-[#9c9c9d]">
-          No setup needed. The demo workspace is pre-filled.
+          Connect your runbooks and GitHub repositories to start triaging with Vigil.
         </p>
         <div className="mt-7 flex justify-center">
-          <Link href="/dashboard" className="keycap-download-btn">
+          <Link href="/login" className="keycap-download-btn">
             Open Console
           </Link>
         </div>

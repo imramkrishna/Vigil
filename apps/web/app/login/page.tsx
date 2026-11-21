@@ -1,18 +1,34 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuroraBackground } from "@/components/AuroraBackground";
-import { signInEmail, signInWithGitHub } from "@/lib/api";
+import { getMe, signInEmail, signInWithGitHub } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getMe().then((user) => {
+      if (!active) return;
+      if (user) {
+        router.replace("/dashboard");
+      } else {
+        setCheckingAuth(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +36,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await signInEmail(email, password);
-      router.push("/dashboard");
+      router.replace("/dashboard");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Invalid email or password."
@@ -44,6 +60,17 @@ export default function LoginPage() {
       setGithubLoading(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="relative flex min-h-screen w-full items-center justify-center bg-[#07080a] text-white">
+        <AuroraBackground />
+        <div className="relative z-10 text-[13px] text-[#9c9c9d]">
+          Checking session…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#07080a] text-white">
@@ -125,14 +152,6 @@ export default function LoginPage() {
               {loading ? "Signing in…" : "Log in"}
             </button>
           </form>
-
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard")}
-            className="mt-3 w-full rounded-lg border border-white/15 px-4 py-2.5 text-[14px] text-[#9c9c9d] transition-colors hover:border-white/30 hover:text-white"
-          >
-            Try the demo workspace
-          </button>
 
           <p className="mt-6 text-center text-[13px] text-[#9c9c9d]">
             New to Vigil?{" "}

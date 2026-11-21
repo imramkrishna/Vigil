@@ -13,46 +13,6 @@ interface ApprovalItem {
   status: "pending" | "approved" | "rejected";
 }
 
-const INITIAL: ApprovalItem[] = [
-  {
-    id: "a1",
-    title: "Create ticket: roll back checkout-api",
-    target: "Jira",
-    why: "Deploy 7f3a91c raised the connection pool beyond the database limit. Rolling back restores capacity.",
-    details: [
-      ["Project", "PAY-INFRA"],
-      ["Priority", "P1"],
-      ["Assignee", "oncall-payments"],
-    ],
-    status: "pending",
-  },
-  {
-    id: "a2",
-    title: "Post update to #incidents-payments",
-    target: "Slack",
-    why: "Lets support and merchant teams know the cause is found and a rollback is underway.",
-    details: [
-      ["Channel", "#incidents-payments"],
-      [
-        "Message",
-        "INC-2048: checkout errors traced to DB pool exhaustion. Rolling back.",
-      ],
-    ],
-    status: "pending",
-  },
-  {
-    id: "a3",
-    title: "Add CI check for pool size",
-    target: "Follow-up tracker",
-    why: "Prevents future config changes from exceeding database connection limits.",
-    details: [
-      ["Owner", "platform-db-team"],
-      ["Due", "5 days"],
-    ],
-    status: "approved",
-  },
-];
-
 function mapApprovalRow(r: ApprovalRow): ApprovalItem {
   const entries = Object.entries(r.action?.payload ?? {}).map(
     ([k, v]) =>
@@ -75,22 +35,36 @@ export function ApprovalsInboxView({
   currentRole?: "viewer" | "responder" | "lead" | "admin";
   onDecisionComplete?: () => void;
 }) {
-  const [items, setItems] = useState<ApprovalItem[]>(INITIAL);
+  const [items, setItems] = useState<ApprovalItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "pending" | "decided">("all");
-  const [selectedId, setSelectedId] = useState("a1");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     listApprovals()
       .then((rows) => {
-        if (rows.length > 0) {
-          const mapped = rows.map(mapApprovalRow);
-          setItems(mapped);
-          setSelectedId(mapped[0]!.id);
-        }
+        if (!active) return;
+        const mapped = rows.map(mapApprovalRow);
+        setItems(mapped);
+        setSelectedId(mapped[0]?.id ?? null);
+        setError(null);
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (!active) return;
+        setError(
+          err instanceof Error ? err.message : "Failed to load approvals."
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const filtered = items.filter((item) => {
@@ -100,7 +74,7 @@ export function ApprovalsInboxView({
   });
 
   const selected =
-    filtered.find((i) => i.id === selectedId) ?? filtered[0] ?? items[0];
+    filtered.find((i) => i.id === selectedId) ?? filtered[0] ?? items[0] ?? null;
   const pendingCount = items.filter((i) => i.status === "pending").length;
   const canDecide =
     currentRole !== "viewer" && selected?.status === "pending" && !submitting;
@@ -109,6 +83,8 @@ export function ApprovalsInboxView({
     if (!selected) return;
     setSubmitting(true);
     setFeedback(null);
+    setError(null);
+    const prevStatus = selected.status;
     setItems((prev) =>
       prev.map((i) => (i.id === selected.id ? { ...i, status } : i))
     );
@@ -116,12 +92,23 @@ export function ApprovalsInboxView({
       const res = await decideApproval(selected.id, status);
       if (res.answer) {
         setFeedback(res.answer);
+      } else {
+        setFeedback(
+          status === "approved"
+            ? "Action approved and executed."
+            : "Action rejected."
+        );
       }
-    } catch {
-      // Offline demo fallback
+      onDecisionComplete?.();
+    } catch (err) {
+      setItems((prev) =>
+        prev.map((i) => (i.id === selected.id ? { ...i, status: prevStatus } : i))
+      );
+      setError(
+        err instanceof Error ? err.message : "Failed to submit decision."
+      );
     } finally {
       setSubmitting(false);
-      onDecisionComplete?.();
     }
   };
 
@@ -184,7 +171,17 @@ export function ApprovalsInboxView({
         </span>
       </div>
 
-      {filtered.length === 0 ? (
+      {error && (
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-[13px] text-rose-300">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="dash-card py-14 text-center text-[13.5px] text-[#8a8c95]">
+          Loading approvals…
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="dash-card py-14 text-center">
           <p className="text-[14px] font-medium text-[#d8dae0]">
             No approvals in this view

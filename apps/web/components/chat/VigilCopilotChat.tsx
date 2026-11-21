@@ -210,7 +210,6 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
         return t;
       })
     );
-    onApprovalDecision?.(approvalId, decision);
 
     try {
       const res = await fetch(`${API_BASE}/api/approvals/${approvalId}/decide`, {
@@ -219,27 +218,46 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
         credentials: "include",
         body: JSON.stringify({ decision }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.answer) {
-          setTurns((prev) => [
-            ...prev,
-            {
-              id: `asst_res_${Date.now()}`,
-              role: "assistant",
-              mode: "incident",
-              createdAt: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              content: data.answer,
-              timeline: data.timeline,
-            },
-          ]);
-        }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `Approval failed (${res.status})`);
       }
-    } catch {
-      // Backend offline — local state already updated
+      onApprovalDecision?.(approvalId, decision);
+      if (data.answer) {
+        setTurns((prev) => [
+          ...prev,
+          {
+            id: `asst_res_${Date.now()}`,
+            role: "assistant",
+            mode: "incident",
+            createdAt: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            content: data.answer,
+            timeline: data.timeline,
+          },
+        ]);
+      }
+    } catch (err) {
+      // Revert optimistic update and surface the real error
+      setTurns((prev) => [
+        ...prev.map((t) =>
+          t.approvalId === approvalId ? { ...t, approvalDecision: "pending" as const } : t
+        ),
+        {
+          id: `asst_err_${Date.now()}`,
+          role: "assistant",
+          mode: "incident",
+          createdAt: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          content: `Could not record approval decision: ${
+            err instanceof Error ? err.message : "Request failed."
+          }`,
+        },
+      ]);
     }
   };
 
@@ -271,28 +289,27 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
           credentials: "include",
           body: JSON.stringify({ query: content, threadId }),
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.threadId) setThreadId(data.threadId);
-          const liveTurn: ChatTurn = {
-            id: `asst_${Date.now()}`,
-            role: "assistant",
-            mode: "ask",
-            createdAt: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-            content: data.answer || "Completed query.",
-            citations: data.citations || [],
-            confidence: data.confidence || "high",
-            grounded: data.grounded ?? true,
-            timeline: data.timeline || [],
-          };
-          setTurns((prev) => [...prev, liveTurn]);
-          setIsGenerating(false);
-          onSendMessage?.(liveTurn);
-          return;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || `Request failed (${res.status})`);
         }
+        if (data.threadId) setThreadId(data.threadId);
+        const liveTurn: ChatTurn = {
+          id: `asst_${Date.now()}`,
+          role: "assistant",
+          mode: "ask",
+          createdAt: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          content: data.answer || "Completed query.",
+          citations: data.citations || [],
+          confidence: data.confidence || "high",
+          grounded: data.grounded ?? true,
+          timeline: data.timeline || [],
+        };
+        setTurns((prev) => [...prev, liveTurn]);
+        onSendMessage?.(liveTurn);
       } else if (activeMode === "incident") {
         const res = await fetch(`${API_BASE}/api/incidents`, {
           method: "POST",
@@ -304,272 +321,89 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
             symptomSummary: content,
           }),
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.threadId) setThreadId(data.threadId);
-          const liveTurn: ChatTurn = {
-            id: `asst_${Date.now()}`,
-            role: "assistant",
-            mode: "incident",
-            createdAt: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-            content: data.answer || "Incident investigation paused at approval gate.",
-            citations: data.citations || [],
-            confidence: data.confidence || "high",
-            grounded: true,
-            timeline: data.timeline || [],
-            hypotheses: data.hypotheses || [],
-            proposedAction: data.proposedAction || undefined,
-            approvalId: data.incident?.id,
-            approvalDecision: data.proposedAction ? "pending" : undefined,
-          };
-          setTurns((prev) => [...prev, liveTurn]);
-          setIsGenerating(false);
-          onSendMessage?.(liveTurn);
-          return;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || `Request failed (${res.status})`);
         }
+        if (data.threadId) setThreadId(data.threadId);
+        const liveTurn: ChatTurn = {
+          id: `asst_${Date.now()}`,
+          role: "assistant",
+          mode: "incident",
+          createdAt: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          content: data.answer || "Incident investigation paused at approval gate.",
+          citations: data.citations || [],
+          confidence: data.confidence || "high",
+          grounded: true,
+          timeline: data.timeline || [],
+          hypotheses: data.hypotheses || [],
+          proposedAction: data.proposedAction || undefined,
+          approvalId: data.approvalId ?? data.incident?.id,
+          approvalDecision: data.proposedAction ? "pending" : undefined,
+        };
+        setTurns((prev) => [...prev, liveTurn]);
+        onSendMessage?.(liveTurn);
       } else if (activeMode === "postmortem") {
         const listRes = await fetch(`${API_BASE}/api/incidents`, {
           credentials: "include",
         });
-        if (listRes.ok) {
-          const listData = await listRes.json();
-          const latestIncident = listData.incidents?.[0];
-          if (latestIncident?.id) {
-            const pmRes = await fetch(
-              `${API_BASE}/api/incidents/${latestIncident.id}/postmortem`,
-              { method: "POST", credentials: "include" }
-            );
-            if (pmRes.ok) {
-              const pmData = await pmRes.json();
-              if (pmData.threadId) setThreadId(pmData.threadId);
-              const liveTurn: ChatTurn = {
-                id: `asst_${Date.now()}`,
-                role: "assistant",
-                mode: "postmortem",
-                createdAt: new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-                content: `Generated blameless postmortem for **${latestIncident.title}** (${latestIncident.severity}).`,
-                confidence: "high",
-                grounded: true,
-                timeline: pmData.timeline || [],
-                postmortemMarkdown: pmData.postmortemMarkdown,
-                actionItems: pmData.actionItems || [],
-              };
-              setTurns((prev) => [...prev, liveTurn]);
-              setIsGenerating(false);
-              onSendMessage?.(liveTurn);
-              return;
-            }
-          }
+        const listData = await listRes.json().catch(() => ({}));
+        if (!listRes.ok) {
+          throw new Error(listData?.error || `Failed to load incidents (${listRes.status})`);
         }
+        const latestIncident = listData.incidents?.[0];
+        if (!latestIncident?.id) {
+          throw new Error("No incidents exist yet. Create or investigate an incident before drafting a postmortem.");
+        }
+        const pmRes = await fetch(
+          `${API_BASE}/api/incidents/${latestIncident.id}/postmortem`,
+          { method: "POST", credentials: "include" }
+        );
+        const pmData = await pmRes.json().catch(() => ({}));
+        if (!pmRes.ok) {
+          throw new Error(pmData?.error || `Postmortem generation failed (${pmRes.status})`);
+        }
+        if (pmData.threadId) setThreadId(pmData.threadId);
+        const liveTurn: ChatTurn = {
+          id: `asst_${Date.now()}`,
+          role: "assistant",
+          mode: "postmortem",
+          createdAt: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          content: `Generated blameless postmortem for **${latestIncident.title}** (${latestIncident.severity}).`,
+          confidence: "high",
+          grounded: true,
+          timeline: pmData.timeline || [],
+          postmortemMarkdown: pmData.postmortemMarkdown,
+          actionItems: pmData.actionItems || [],
+        };
+        setTurns((prev) => [...prev, liveTurn]);
+        onSendMessage?.(liveTurn);
       }
-    } catch {
-      // Fall back to interactive demo response when API is unreachable
+    } catch (err) {
+      const errorTurn: ChatTurn = {
+        id: `asst_err_${Date.now()}`,
+        role: "assistant",
+        mode: activeMode,
+        createdAt: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        content: `**Error:** ${
+          err instanceof Error
+            ? err.message
+            : "Could not reach the Vigil API server. Make sure the API server is running and you are signed in."
+        }`,
+      };
+      setTurns((prev) => [...prev, errorTurn]);
+    } finally {
+      setIsGenerating(false);
     }
-
-    await new Promise((r) => setTimeout(r, 700));
-
-    let assistantTurn: ChatTurn;
-
-    if (
-      activeMode === "incident" ||
-      content.toLowerCase().includes("502") ||
-      content.toLowerCase().includes("fail")
-    ) {
-      assistantTurn = {
-        id: `asst_${Date.now()}`,
-        role: "assistant",
-        mode: "incident",
-        createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        confidence: "high",
-        grounded: true,
-        timeline: [
-          `Classified intent=investigate (service=checkout-api, severity=${activeSeverity})`,
-          'Called tools: fetch_recent_deploys(service="checkout-api", limit=3)',
-          "Fetched live error logs: Cloud Run container 502 Bad Gateway spike (+340% over baseline)",
-          "Extracted trace id: 4a9f81bc-0e12-4d2b-98f1-394f71a098c2",
-          'RAG search against payment-runbook-v4.pdf: query="circuit breaker timeout & pool exhaustion"',
-          "Verified grounding: 3 sources cited (confidence=0.94)",
-          "Synthesized ranked hypotheses and staged rollback approval",
-        ],
-        citations: [
-          {
-            sourceId: "RUNBOOK-PAY-V4#sec-rollback",
-            title: "Payment Gateway Rollback Runbook",
-            sourceUrl: "https://docs.vigil.internal/runbooks/checkout-rollback.pdf",
-            snippet:
-              "When downstream Stripe webhook latency spikes above 2500ms, set POOL_TIMEOUT_MS=5000 and roll back to the previous stable container tag (sha-8f2a1b).",
-          },
-          {
-            sourceId: "GIT-PR#4912",
-            title: "PR #4912: PgBouncer pool migration",
-            sourceUrl: "https://github.com/org/checkout-api/pull/4912",
-            snippet:
-              "Merge commit 9b8f2c3 changed max_connections from 80 to 20 without updating transaction timeout thresholds.",
-          },
-          {
-            sourceId: "DATADOG-LOG-STREAM#991",
-            title: "checkout-api Live Tail (us-central1)",
-            snippet:
-              "FATAL [pool] Connection pool exhausted: 20/20 active leases, 412 queued callers timed out waiting for connection (502 Gateway Timeout).",
-          },
-        ],
-        hypotheses: [
-          {
-            cause:
-              "PgBouncer connection pool saturation triggered by commit 9b8f2c3 (reduced pool size to 20)",
-            confidence: 0.94,
-            evidence:
-              "Database lease timeout logs coincide exactly with 04:10:00Z deployment tag v2.4.1.",
-          },
-          {
-            cause:
-              "Upstream Stripe API webhook latency holding connections open > 3000ms",
-            confidence: 0.62,
-            evidence:
-              "Average response time on /v1/charge increased from 180ms to 2400ms.",
-          },
-          {
-            cause: "Container CPU throttling on Cloud Run during auto-scale event",
-            confidence: 0.28,
-            evidence:
-              "CPU utilization reached 78% but container count scaled from 4 to 12 as expected.",
-          },
-        ],
-        proposedAction: {
-          kind: "create_ticket",
-          title: `Roll back checkout-api to v2.4.0 & notify team (${activeSeverity})`,
-          target: "Slack #incidents-payments · Jira PAY-4091",
-          rationale:
-            "Rolling back to commit 8f2a1b immediately restores connection pool capacity to 80 while the payment team investigates the pool configuration.",
-          evidenceIds: ["RUNBOOK-PAY-V4#sec-rollback", "GIT-PR#4912"],
-          idempotencyKey: `action_rollback_${Date.now()}`,
-          payload: {
-            service: "checkout-api",
-            currentTag: "v2.4.1-9b8f2c3",
-            rollbackTag: "v2.4.0-8f2a1b",
-            severity: activeSeverity,
-            notifyChannels: ["#incidents-payments", "#eng-all"],
-            autoRollbackGcpTraffic: true,
-          },
-        },
-        approvalId: `appr_${Date.now()}`,
-        approvalDecision: "pending",
-        content: `### Incident summary (${activeSeverity})
-
-I cross-checked **Cloud Run live logs**, **recent Git deploys**, and your **payment runbook**.
-
-**Primary finding:** The 502 Bad Gateway errors on \`checkout-api\` are caused by database connection pool exhaustion following deploy \`v2.4.1\` (commit \`9b8f2c3\`), which reduced pool leases from 80 to 20 without enabling transaction pooling.
-
-Review the ranked causes and proposed rollback below.`,
-      };
-    } else if (activeMode === "postmortem") {
-      assistantTurn = {
-        id: `asst_${Date.now()}`,
-        role: "assistant",
-        mode: "postmortem",
-        createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        confidence: "high",
-        grounded: true,
-        timeline: [
-          "Collected telemetry logs from Cloud Run (03:45 - 04:30 UTC)",
-          "Queried incident channel #incidents-payments",
-          "Compiled timeline markers (detection 04:11 UTC, mitigation 04:24 UTC)",
-          "Generated blameless postmortem report with 4 follow-up tasks",
-        ],
-        content: `I drafted a blameless postmortem for **INC-2026-8841** (\`checkout-api\` connection pool exhaustion). Review the preview, check off follow-up tasks, or copy the raw Markdown below.`,
-        postmortemMarkdown: `# Incident Postmortem: checkout-api Pool Exhaustion (INC-2026-8841)
-
-**Date:** 2026-11-04 · **Severity:** SEV-1 · **Duration:** 14 minutes · **Owner:** @payments-core
-
-## Executive summary
-Between 04:10 UTC and 04:24 UTC, users experienced intermittent 502 Bad Gateway responses when finalizing checkout carts. Approximately 4.2% of checkout attempts failed before traffic was rolled back to release \`v2.4.0\`.
-
-## Root cause
-Deploy \`v2.4.1\` reduced database pool allocation from 80 connections to 20. Under peak traffic, all leases saturated within 90 seconds.
-
-## Timeline
-- **04:10 UTC:** Automated deploy promoted \`v2.4.1\` to Cloud Run.
-- **04:11 UTC:** Synthetic canary failed 5/5 checks on \`/v1/charge\`.
-- **04:12 UTC:** Vigil detected 502 anomaly spike (+340%) and alerted \`#incidents-payments\`.
-- **04:15 UTC:** Vigil isolated commit \`9b8f2c3\` and staged a rollback approval.
-- **04:16 UTC:** On-call lead approved rollback.
-- **04:24 UTC:** Cloud Run routed 100% of traffic back to \`v2.4.0\`; error rate normalized to 0.01%.
-
-## Impact
-- Total 502 responses: 1,420
-- Impacted active checkout sessions: 312
-- Estimated delayed revenue: $18,400 (retried post-mitigation)`,
-        actionItems: [
-          {
-            title: "Add synthetic load test step to CI checking pool exhaustion under 500 RPS",
-            owner: "alex.dev",
-            priority: "P0",
-          },
-          {
-            title: "Configure automated Cloud Run rollback when canary error rate exceeds 1%",
-            owner: "sarah.sre",
-            priority: "P1",
-          },
-          {
-            title: "Update payment-runbook-v4.pdf with PgBouncer connection sizing table",
-            owner: "milo.lead",
-            priority: "P1",
-          },
-          {
-            title: "Review PostgreSQL lease timeout defaults across payment workers",
-            owner: "david.infra",
-            priority: "P2",
-          },
-        ],
-      };
-    } else {
-      assistantTurn = {
-        id: `asst_${Date.now()}`,
-        role: "assistant",
-        mode: "ask",
-        createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        confidence: "high",
-        grounded: true,
-        timeline: [
-          "Classified query intent=ask (service lookup)",
-          "Searched indexed runbooks for payment rollback steps",
-          "Verified matching excerpt in payment-runbook-v4.pdf",
-        ],
-        citations: [
-          {
-            sourceId: "RUNBOOK-PAY-V4#sec-3",
-            title: "Payment Services Emergency Manual",
-            sourceUrl: "https://docs.vigil.internal/runbooks/checkout-rollback.pdf",
-            snippet:
-              "To roll back checkout-api safely without dropping active sessions, run: gcloud run services update-traffic checkout-api --to-revisions=PREV=100 --region=us-central1",
-          },
-        ],
-        content: `Based on **payment-runbook-v4.pdf** (Section 3: Emergency Rollback):
-
-To roll back \`checkout-api\` to the previous healthy revision without dropping active sessions:
-
-\`\`\`bash
-gcloud run services update-traffic checkout-api \\
-  --to-revisions=checkout-api-00042-rev=100 \\
-  --region=us-central1
-\`\`\`
-
-**Operational notes:**
-1. **Traffic migration:** Cloud Run immediately routes 100% of new ingress to the prior revision while draining existing connections over 30s.
-2. **Database migrations:** Schema versions \`v2.4.0\` and \`v2.4.1\` are backwards-compatible; no schema rollback is needed.
-3. **Cache flush:** Run \`curl -X POST /internal/cache/flush\` only if Redis key formats changed.`,
-      };
-    }
-
-    setTurns((prev) => [...prev, assistantTurn]);
-    setIsGenerating(false);
-    onSendMessage?.(assistantTurn);
   };
 
   const isEmpty = turns.length === 0;
@@ -888,7 +722,6 @@ gcloud run services update-traffic checkout-api \\
         isOpen={isServiceModalOpen}
         onClose={() => setIsServiceModalOpen(false)}
         onRegisterService={async (service) => {
-          onServiceRegistered?.(service);
           try {
             const res = await fetch(`${API_BASE}/api/ops/services`, {
               method: "POST",
@@ -896,9 +729,13 @@ gcloud run services update-traffic checkout-api \\
               credentials: "include",
               body: JSON.stringify(service),
             });
-            return res.ok;
+            if (res.ok) {
+              onServiceRegistered?.(service);
+              return true;
+            }
+            return false;
           } catch {
-            return true;
+            return false;
           }
         }}
       />

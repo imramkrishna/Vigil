@@ -141,6 +141,7 @@ function DashboardContent() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const historyScope = user?.userId || "local";
   const threads = useChatHistory(historyScope);
 
@@ -153,6 +154,7 @@ function DashboardContent() {
   const [title, setTitle] = useState("");
   const [severity, setSeverity] = useState<Severity>("SEV-2");
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [latestIncident, setLatestIncident] = useState<LiveIncidentData | null>(
@@ -166,11 +168,26 @@ function DashboardContent() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     getMe().then((u) => {
-      if (u) setUser(u);
+      if (!active) return;
+      if (!u) {
+        router.replace("/login");
+        return;
+      }
+      setUser(u);
+      setAuthChecked(true);
+      refreshPendingApprovals();
     });
+    return () => {
+      active = false;
+    };
+  }, [router, refreshPendingApprovals]);
+
+  useEffect(() => {
+    if (!authChecked) return;
     refreshPendingApprovals();
-  }, [tab, refreshPendingApprovals]);
+  }, [tab, authChecked, refreshPendingApprovals]);
 
   useEffect(() => {
     if (!showNew) return;
@@ -259,6 +276,7 @@ function DashboardContent() {
     if (!title.trim() || creating) return;
     const cleanTitle = title.trim();
     setCreating(true);
+    setCreateError(null);
     try {
       const res = await createIncident({
         title: cleanTitle,
@@ -272,14 +290,16 @@ function DashboardContent() {
         answer: res.answer,
       });
       refreshPendingApprovals();
-    } catch {
-      // Offline demo fallback
-    } finally {
-      setCreating(false);
       setShowNew(false);
       setTab("incident");
       setBanner(`Investigating "${cleanTitle}" (${severity}).`);
       setTitle("");
+    } catch (err) {
+      setCreateError(
+        err instanceof Error ? err.message : "Failed to create incident."
+      );
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -560,6 +580,14 @@ function DashboardContent() {
     </div>
   );
 
+  if (!authChecked || !user) {
+    return (
+      <div className="dash-surface flex h-screen w-full items-center justify-center bg-[#17181b] text-[13px] text-[#8a8c95]">
+        Loading workspace…
+      </div>
+    );
+  }
+
   return (
     <div className="dash-surface flex h-screen w-full overflow-hidden">
       {/* Desktop Collapsible Sidebar */}
@@ -765,9 +793,17 @@ function DashboardContent() {
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-white/[0.06] px-6 py-4">
+              {createError && (
+                <p className="mr-auto text-[12px] text-rose-400">
+                  {createError}
+                </p>
+              )}
               <button
                 type="button"
-                onClick={() => setShowNew(false)}
+                onClick={() => {
+                  setCreateError(null);
+                  setShowNew(false);
+                }}
                 className="dash-btn-ghost"
               >
                 Cancel

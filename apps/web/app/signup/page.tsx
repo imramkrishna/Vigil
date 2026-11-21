@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuroraBackground } from "@/components/AuroraBackground";
-import { signInWithGitHub, signUpEmail } from "@/lib/api";
+import { getMe, signInWithGitHub, signUpEmail } from "@/lib/api";
 
 export default function SignupPage() {
   const router = useRouter();
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [team, setTeam] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,13 +16,28 @@ export default function SignupPage() {
   const [githubLoading, setGithubLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    getMe().then((user) => {
+      if (!active) return;
+      if (user) {
+        router.replace("/dashboard");
+      } else {
+        setCheckingAuth(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
       await signUpEmail(team, email, password);
-      router.push("/dashboard");
+      router.replace("/dashboard");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not create workspace."
@@ -49,6 +65,17 @@ export default function SignupPage() {
   const fieldClass =
     "mt-1.5 w-full rounded-lg border border-white/15 bg-[#07080a] px-3.5 py-2.5 text-[14px] outline-none placeholder:text-[#9c9c9d]/50 focus:border-[#ff6b4a]";
 
+  if (checkingAuth) {
+    return (
+      <div className="relative flex min-h-screen w-full items-center justify-center bg-[#07080a] text-white">
+        <AuroraBackground />
+        <div className="relative z-10 text-[13px] text-[#9c9c9d]">
+          Checking session…
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#07080a] text-white">
       <AuroraBackground />
@@ -58,7 +85,7 @@ export default function SignupPage() {
             Create your workspace
           </h1>
           <p className="mt-1.5 text-[14px] text-[#9c9c9d]">
-            Start with a sample incident already loaded.
+            Set up your engineering operations workspace.
           </p>
 
           <button
@@ -95,7 +122,7 @@ export default function SignupPage() {
               <label htmlFor="team" className="block text-[13px] font-medium">
                 Team name
               </label>
-              <input id="team" required value={team} onChange={(e) => setTeam(e.target.value)} placeholder="Acme Payments" className={fieldClass} />
+              <input id="team" required value={team} onChange={(e) => setTeam(e.target.value)} placeholder="Your engineering team" className={fieldClass} />
             </div>
             <div>
               <label htmlFor="email" className="block text-[13px] font-medium">

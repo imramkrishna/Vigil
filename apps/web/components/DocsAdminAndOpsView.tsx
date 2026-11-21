@@ -11,40 +11,22 @@ import {
   type DocumentRow,
 } from "@/lib/api";
 
-const FALLBACK_DOCS: DocumentRow[] = [
-  {
-    id: "demo-1",
-    orgId: "demo",
-    name: "pgBouncer saturation runbook.pdf",
-    sourceUrl: "runbooks/pgbouncer-saturation.pdf",
-    status: "indexed",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "demo-2",
-    orgId: "demo",
-    name: "Checkout API 504 triage guide.pdf",
-    sourceUrl: "runbooks/checkout-api-504.pdf",
-    status: "indexed",
-    createdAt: new Date().toISOString(),
-  },
-];
-
 export function DocsAdminAndOpsView() {
-  const [docs, setDocs] = useState<DocumentRow[]>(FALLBACK_DOCS);
+  const [docs, setDocs] = useState<DocumentRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const [query, setQuery] = useState("");
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
     const [liveDocs, liveBudget] = await Promise.all([
-      listDocs().catch(() => null),
+      listDocs(),
       getBudget().catch(() => null),
     ]);
-    if (liveDocs && liveDocs.length > 0) setDocs(liveDocs);
+    setDocs(liveDocs);
     if (liveBudget) setBudget(liveBudget);
   };
 
@@ -52,8 +34,11 @@ export function DocsAdminAndOpsView() {
     setRefreshing(true);
     try {
       await loadData();
-    } catch {
-      // Keep fallback data when offline
+    } catch (err) {
+      setNotice({
+        kind: "err",
+        text: err instanceof Error ? err.message : "Failed to refresh runbooks.",
+      });
     } finally {
       setRefreshing(false);
     }
@@ -61,14 +46,22 @@ export function DocsAdminAndOpsView() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      listDocs().catch(() => null),
-      getBudget().catch(() => null),
-    ]).then(([liveDocs, liveBudget]) => {
-      if (!active) return;
-      if (liveDocs && liveDocs.length > 0) setDocs(liveDocs);
-      if (liveBudget) setBudget(liveBudget);
-    });
+    Promise.all([listDocs(), getBudget().catch(() => null)])
+      .then(([liveDocs, liveBudget]) => {
+        if (!active) return;
+        setDocs(liveDocs);
+        if (liveBudget) setBudget(liveBudget);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setNotice({
+          kind: "err",
+          text: err instanceof Error ? err.message : "Failed to load runbooks.",
+        });
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -94,23 +87,36 @@ export function DocsAdminAndOpsView() {
         },
         ...prev,
       ]);
-      setNotice(`Uploaded "${file.name}". Indexing chunks in the background.`);
+      setNotice({
+        kind: "ok",
+        text: `Uploaded "${file.name}". Indexing chunks in the background.`,
+      });
       setTimeout(refresh, 2500);
     } catch (err) {
-      setNotice(
-        err instanceof Error ? err.message : "Upload failed. Check API server."
-      );
+      setNotice({
+        kind: "err",
+        text:
+          err instanceof Error
+            ? err.message
+            : "Upload failed. Check API server.",
+      });
     } finally {
       setUploading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
+    const previous = docs;
     setDocs((prev) => prev.filter((d) => d.id !== id));
+    setNotice(null);
     try {
       await deleteDoc(id);
-    } catch {
-      // Local state already updated
+    } catch (err) {
+      setDocs(previous);
+      setNotice({
+        kind: "err",
+        text: err instanceof Error ? err.message : "Failed to delete document.",
+      });
     }
   };
 
@@ -170,9 +176,13 @@ export function DocsAdminAndOpsView() {
       {notice && (
         <div
           role="status"
-          className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-[13px] text-emerald-300"
+          className={`rounded-xl border px-4 py-2.5 text-[13px] ${
+            notice.kind === "err"
+              ? "border-rose-500/20 bg-rose-500/10 text-rose-300"
+              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+          }`}
         >
-          {notice}
+          {notice.text}
         </div>
       )}
 
@@ -226,7 +236,11 @@ export function DocsAdminAndOpsView() {
           </div>
         </div>
 
-        {filteredDocs.length === 0 ? (
+        {loading ? (
+          <div className="px-6 py-14 text-center text-[13.5px] text-[#8a8c95]">
+            Loading runbooks…
+          </div>
+        ) : filteredDocs.length === 0 ? (
           <div className="px-6 py-14 text-center">
             <p className="text-[14px] font-medium text-[#d8dae0]">
               {docs.length === 0 ? "No runbooks uploaded yet" : "No matching runbooks"}
