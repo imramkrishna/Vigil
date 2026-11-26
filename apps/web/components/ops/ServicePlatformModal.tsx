@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { X, Loader2, ChevronRight } from "lucide-react";
+import { listIntegrations, testServiceLogs } from "@/lib/api";
 import type {
   DeploymentPlatform,
+  IntegrationProvider,
+  OrgIntegrationRow,
   ServiceRegistrationPayload,
 } from "../../types/vigil";
 
@@ -16,13 +19,19 @@ interface ServicePlatformModalProps {
   initialService?: Partial<ServiceRegistrationPayload>;
 }
 
-const PLATFORMS: { id: DeploymentPlatform; label: string }[] = [
-  { id: "cloud_run", label: "Cloud Run" },
-  { id: "aws_lambda", label: "Lambda" },
-  { id: "aws_ec2", label: "EC2" },
-  { id: "render", label: "Render" },
-  { id: "vercel", label: "Vercel" },
-  { id: "custom", label: "Custom" },
+const PLATFORMS: {
+  id: DeploymentPlatform;
+  label: string;
+  provider: IntegrationProvider | null;
+}[] = [
+  { id: "cloud_run", label: "Cloud Run", provider: "gcp" },
+  { id: "gcp_vm", label: "GCP VM", provider: "gcp" },
+  { id: "aws_lambda", label: "Lambda", provider: "aws" },
+  { id: "aws_ec2", label: "EC2", provider: "aws" },
+  { id: "render", label: "Render", provider: "render" },
+  { id: "vercel", label: "Vercel", provider: "vercel" },
+  { id: "vps", label: "Linux VPS", provider: "vps" },
+  { id: "custom", label: "Custom", provider: null },
 ];
 
 const PLATFORM_FIELDS: Record<DeploymentPlatform, [string, string, string][]> = {
@@ -31,6 +40,11 @@ const PLATFORM_FIELDS: Record<DeploymentPlatform, [string, string, string][]> = 
     ["serviceName", "Service", "checkout-api"],
     ["region", "Region", "us-central1"],
   ],
+  gcp_vm: [
+    ["projectId", "Project ID", "my-gcp-production"],
+    ["instanceName", "Instance name", "api-vm-01"],
+    ["zone", "Zone", "us-central1-a"],
+  ],
   aws_lambda: [
     ["region", "Region", "us-east-1"],
     ["functionName", "Function", "checkout-authorizer"],
@@ -38,21 +52,24 @@ const PLATFORM_FIELDS: Record<DeploymentPlatform, [string, string, string][]> = 
   ],
   aws_ec2: [
     ["region", "Region", "us-east-1"],
+    ["logGroupName", "Log group", "/var/log/app"],
     ["instanceId", "Instance ID", "i-0982348af"],
-    ["logPath", "Log path", "/var/log/app/error.log"],
   ],
   render: [
     ["serviceId", "Service ID", "srv-cbq384234"],
-    ["apiKeyEnv", "API key secret", "RENDER_API_KEY"],
+    ["ownerId", "Owner ID (opt)", "tea-12345"],
   ],
   vercel: [
     ["projectId", "Project ID", "prj_898492"],
-    ["teamSlug", "Team", "my-team"],
-    ["deploymentId", "Deployment", "dpl_892348"],
+    ["teamId", "Team ID (opt)", "team_abc123"],
+    ["deploymentId", "Deployment (opt)", "dpl_892348"],
+  ],
+  vps: [
+    ["hostname", "Hostname", "prod-eu-01.example.com"],
+    ["unitName", "Systemd / container unit", "checkout-api.service"],
   ],
   custom: [
-    ["authHeaderName", "Auth header", "X-Ops-Token"],
-    ["healthCheckUrl", "Health check URL", "https://service/healthz"],
+    ["logUrl", "Custom Logs URL (HTTPS)", "https://logs.example.com/api/logs"],
   ],
 };
 
@@ -75,22 +92,27 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
   const [platform, setPlatform] = useState<DeploymentPlatform>(
     initialService?.platform || "cloud_run"
   );
-  const [logUrl] = useState(initialService?.logUrl || "");
+  const [integrationId, setIntegrationId] = useState<string>(
+    initialService?.integrationId || ""
+  );
+  const [integrations, setIntegrations] = useState<OrgIntegrationRow[]>([]);
 
   const [platformConfig, setPlatformConfig] = useState<Record<string, string>>({
     projectId: "",
     serviceName: "",
     region: "",
+    instanceName: "",
+    zone: "",
     functionName: "",
     logGroupName: "",
     instanceId: "",
     serviceId: "",
+    ownerId: "",
+    teamId: "",
     deploymentId: "",
-    apiKeyEnv: "",
-    logPath: "",
-    teamSlug: "",
-    authHeaderName: "",
-    healthCheckUrl: "",
+    hostname: "",
+    unitName: "",
+    logUrl: initialService?.logUrl || "",
     ...initialService?.platformConfig,
   });
 
@@ -104,6 +126,10 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    listIntegrations()
+      .then((res) => setIntegrations(res.integrations ?? []))
+      .catch(() => {});
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -111,27 +137,61 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [isOpen, onClose]);
 
+  const currentProvider =
+    PLATFORMS.find((p) => p.id === platform)?.provider ?? null;
+
+  const matchingIntegrations = useMemo(
+    () =>
+      currentProvider
+        ? integrations.filter((i) => i.provider === currentProvider)
+        : [],
+    [integrations, currentProvider]
+  );
+
   if (!isOpen) return null;
 
   const handleConfigChange = (key: string, value: string) => {
     setPlatformConfig((prev) => ({ ...prev, [key]: value }));
   };
 
+  const buildPlatformPayload = () => {
+    const fields = PLATFORM_FIELDS[platform];
+    const clean: Record<string, string> = { platform };
+    for (const [key] of fields) {
+      const val = (platformConfig[key] || "").trim();
+      if (val) clean[key] = val;
+    }
+    return clean;
+  };
+
   const handleTestConnection = async () => {
+    if (!name.trim()) {
+      setTestResult({ success: false, message: "Service name is required." });
+      return;
+    }
     setIsTesting(true);
     setTestResult(null);
-    await new Promise((r) => setTimeout(r, 500));
-    setIsTesting(false);
-    setTestResult(
-      !name.trim()
-        ? { success: false, message: "Service name is required." }
-        : {
-            success: true,
-            message: repoUrl.trim()
-              ? "Repository and service config verified."
-              : "Service configuration valid.",
-          }
-    );
+    try {
+      const res = await testServiceLogs({
+        name: name.trim(),
+        platform,
+        integrationId: integrationId || null,
+        logUrl: platform === "custom" ? platformConfig.logUrl?.trim() : undefined,
+        platformConfig: buildPlatformPayload(),
+      });
+      setTestResult({
+        success: Boolean(res.ok),
+        message: res.message || (res.ok ? "Connected." : "Connection failed."),
+      });
+    } catch (err) {
+      setTestResult({
+        success: false,
+        message:
+          err instanceof Error ? err.message : "Connectivity check failed.",
+      });
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -139,16 +199,18 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
     if (!name.trim()) return;
     setIsSaving(true);
     try {
+      const cleanConfig = buildPlatformPayload();
       await onRegisterService({
-        name,
+        name: name.trim(),
+        integrationId: integrationId || null,
         tier,
         owner,
         slackChannel,
         repoUrl,
         githubBranch,
         platform,
-        logUrl,
-        platformConfig,
+        logUrl: platform === "custom" ? (cleanConfig.logUrl ?? "") : "",
+        platformConfig: cleanConfig,
       });
       onClose();
     } finally {
@@ -181,7 +243,7 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-service-title"
-        className="dash-pop flex max-h-[90vh] w-full max-w-[500px] flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[#1d1f24] shadow-[0_24px_64px_-16px_rgba(0,0,0,0.85)]"
+        className="dash-pop flex max-h-[90vh] w-full max-w-[540px] flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[#1d1f24] shadow-[0_24px_64px_-16px_rgba(0,0,0,0.85)]"
       >
         <div className="flex items-start justify-between border-b border-white/[0.06] px-6 py-4">
           <div>
@@ -192,7 +254,7 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
               Add service
             </h3>
             <p className="mt-0.5 text-[12.5px] text-[#8a8c95]">
-              Connect a repository and runtime for deploys and logs.
+              Link a service to a cloud connection for live &amp; historical logs.
             </p>
           </div>
           <button
@@ -275,17 +337,21 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
 
           <div>
             <span className={labelClass}>Platform</span>
-            <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/[0.07] bg-[#141519] p-1 sm:grid-cols-6">
+            <div className="grid grid-cols-4 gap-1 rounded-xl border border-white/[0.07] bg-[#141519] p-1">
               {PLATFORMS.map((p) => {
                 const active = platform === p.id;
                 return (
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => setPlatform(p.id)}
+                    onClick={() => {
+                      setPlatform(p.id);
+                      setIntegrationId("");
+                      setTestResult(null);
+                    }}
                     className={`cursor-pointer rounded-lg py-1.5 text-[12px] font-medium transition-colors ${
                       active
-                        ? "bg-white/[0.1] text-[#ececef]"
+                        ? "bg-white/[0.11] text-[#ececef]"
                         : "text-[#8a8c95] hover:text-[#d8dae0]"
                     }`}
                   >
@@ -296,12 +362,40 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
             </div>
           </div>
 
+          {/* Cloud Integration Picker */}
+          {currentProvider && (
+            <div>
+              <label htmlFor="svc-integration" className={labelClass}>
+                Cloud connection ({currentProvider.toUpperCase()})
+              </label>
+              <select
+                id="svc-integration"
+                value={integrationId}
+                onChange={(e) => setIntegrationId(e.target.value)}
+                className="dash-input"
+              >
+                <option value="">
+                  {matchingIntegrations.length > 0
+                    ? "Auto-select default org integration"
+                    : "No integration connected yet (configure in Settings → Integrations)"}
+                </option>
+                {matchingIntegrations.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name} ({i.authMethod} · {i.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div
             key={platform}
             className={`dash-fade grid gap-3 ${
-              PLATFORM_FIELDS[platform].length === 2
-                ? "grid-cols-1 sm:grid-cols-2"
-                : "grid-cols-1 sm:grid-cols-3"
+              PLATFORM_FIELDS[platform].length === 1
+                ? "grid-cols-1"
+                : PLATFORM_FIELDS[platform].length === 2
+                  ? "grid-cols-1 sm:grid-cols-2"
+                  : "grid-cols-1 sm:grid-cols-3"
             }`}
           >
             {PLATFORM_FIELDS[platform].map(([key, text, ph]) => (
@@ -368,7 +462,7 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-6 py-4">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <button
               type="button"
               disabled={isTesting}
@@ -378,13 +472,14 @@ export const ServicePlatformModal: React.FC<ServicePlatformModalProps> = ({
               {isTesting && (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
               )}
-              <span>{isTesting ? "Testing…" : "Test"}</span>
+              <span>{isTesting ? "Testing…" : "Test connection"}</span>
             </button>
             {testResult && (
               <span
                 className={`truncate text-[12px] ${
                   testResult.success ? "text-emerald-400" : "text-rose-400"
                 }`}
+                title={testResult.message}
               >
                 {testResult.message}
               </span>

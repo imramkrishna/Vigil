@@ -4,6 +4,7 @@ import { askRouter } from "./ask";
 import { chatsRouter } from "./chats";
 import { docsRouter } from "./docs";
 import { incidentsRouter } from "./incidents";
+import { ingestRouter } from "./ingest";
 import { meRouter } from "./me";
 import { opsRouter } from "./ops";
 
@@ -16,3 +17,4 @@ apiRouter.use("/ask", askRouter);
 apiRouter.use("/incidents", incidentsRouter);
 apiRouter.use("/approvals", approvalsRouter);
 apiRouter.use("/ops", opsRouter);
+apiRouter.use("/ingest", ingestRouter);

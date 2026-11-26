@@ -14,6 +14,7 @@ import {
   vector,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
+import { orgIntegrations } from "./integrations-schema";
 
 export * from "./auth-schema";
 
@@ -50,10 +51,12 @@ export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number];
 
 export const DEPLOYMENT_PLATFORMS = [
   "cloud_run",
+  "gcp_vm",
   "aws_lambda",
   "aws_ec2",
   "render",
   "vercel",
+  "vps",
   "custom",
 ] as const;
 export type DeploymentPlatform = (typeof DEPLOYMENT_PLATFORMS)[number];
@@ -65,6 +68,15 @@ export type PlatformConfig =
       projectId: string;
       serviceName: string;
       region?: string;
+    }
+  | {
+      platform: "gcp_vm";
+      logUrl?: string;
+      projectId: string;
+      instanceName?: string;
+      instanceId?: string;
+      zone: string;
+      logName?: string;
     }
   | {
       platform: "aws_lambda";
@@ -92,6 +104,12 @@ export type PlatformConfig =
       projectId: string;
       teamId?: string;
       deploymentId?: string;
+    }
+  | {
+      platform: "vps";
+      logUrl?: string;
+      hostname?: string;
+      unitName?: string;
     }
   | {
       platform: "custom";
@@ -419,6 +437,9 @@ export const opsServices = pgTable(
     orgId: uuid("org_id")
       .notNull()
       .references(() => orgs.id, { onDelete: "cascade" }),
+    integrationId: uuid("integration_id").references(() => orgIntegrations.id, {
+      onDelete: "set null",
+    }),
     name: text("name").notNull(),
     tier: integer("tier").notNull().default(1),
     owner: text("owner"),
@@ -499,3 +520,4 @@ export type ActionLogEntry = typeof actionLog.$inferSelect;
 export type ModelUsage = typeof modelUsage.$inferSelect;
 
 export * from "./chat-schema";
+export * from "./integrations-schema";

@@ -29,6 +29,13 @@
       "when": 1795255971453,
       "tag": "0003_wandering_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795693897860,
+      "tag": "0004_multi_cloud_integrations_and_rls",
+      "breakpoints": true
     }
   ]
 }
