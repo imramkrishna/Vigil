@@ -13,7 +13,7 @@ This folder holds Vigil's design specifications: what each subsystem does, why i
 | **[00](./00-repo-review-and-known-issues.md)** | Repo review | Living document | Strengths, 10 known issues with severity and impact, and the recommended build order. |
 | **[01](./01-octokit-and-github-oauth.md)** | GitHub & Octokit | Implemented (known gaps) | Multi-tenant GitHub access with `@octokit/rest`, GitHub OAuth through Better Auth, commit and diff fetching. Gaps: token selection, hidden errors, no caching. |
 | **[02](./02-hitl-approvals-and-action-execution.md)** | Approvals & actions | **Next up** | Fix the `approvalId` handoff (chat approve returns 404 today) and create real GitHub issues when actions are approved. |
-| **[03](./03-live-logs-and-platform-adapters.md)** | Live logs | Planned | `GET /api/ops/logs`, real "Test connection", live logs in the Evidence Drawer, and log safety rules. |
+| **[03](./03-live-logs-and-platform-adapters.md)** | Live logs (initial) | Extended by [Spec 12](./12-multi-cloud-integrations-and-live-logs.md) | Initial `GET /api/ops/logs` and Evidence Drawer wiring; superseded for multi-cloud credentials & database design by Spec 12. |
 | **[04](./04-incident-room-and-approvals-sync.md)** | UI state sync | Planned | Keep chat, Incident Room and Approvals Inbox consistent after decisions. |
 | **[05](./05-github-webhooks-and-proactive-ingestion.md)** | GitHub webhooks | Planned | Save commits as they happen, auto-ingest markdown runbooks from repos, and cache live GitHub calls. |
 | **[06](./06-evaluation-harness.md)** | Evaluation | Planned | Scored test suites for retrieval, groundedness, incident paths, action safety and prompt injection, with a CI gate. |
@@ -22,6 +22,7 @@ This folder holds Vigil's design specifications: what each subsystem does, why i
 | **[09](./09-feedback-and-observability.md)** | Feedback & tracing | Planned | Thumbs up/flag feedback, audit log, tracing and a metrics dashboard. |
 | **[10](./10-local-dev-testing-and-ci.md)** | Foundation | Planned (high priority) | `.env.example`, Docker Compose, seed data, shared types, Vitest, tenant isolation test, GitHub Actions CI. |
 | **[11](./11-integrations-roadmap.md)** | Integrations | Planned | Slack status and approvals, PagerDuty/Alertmanager auto-incidents, approval watchdog, GitHub App. |
+| **[12](./12-multi-cloud-integrations-and-live-logs.md)** | Multi-cloud logs & DB design | Planned (active focus) | Cons of current log/credential design, consistent 3-table schema (`org_integrations`, `ops_services`, `ops_service_logs`), zero-secret GCP/AWS IAM delegation, AES-256-GCM encryption, unified adapters (`getLiveLogs`, `getLogsByTimestamp`) across Cloud Run, GCP VM, Lambda, EC2, Render, Vercel & VPS, and 4-phase rollout. |
 
 ### Recommended order
 **02 → 10 → 07 → 05 → 06 → 03 / 04 / 08 / 09 → 11.** The reasoning is in [Spec 00, section 3](./00-repo-review-and-known-issues.md).

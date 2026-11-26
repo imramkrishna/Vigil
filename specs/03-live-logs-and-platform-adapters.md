@@ -1,6 +1,8 @@
 # Spec 03: Multi-Platform Live Logs & `logUrl` Integration
 
-**Status:** Planned
+**Status:** Extended by [Spec 12: Multi-Cloud Integrations, Consistent Database Design & Live Logs](./12-multi-cloud-integrations-and-live-logs.md)
+
+> **Note:** For the multi-tenant credential architecture (`org_integrations`), VPS push buffer (`ops_service_logs`), cons of the current design, and phased rollout across Cloud Run, GCP VM, AWS Lambda, AWS EC2, Render, Vercel, and Linux VPS, see **[Spec 12](./12-multi-cloud-integrations-and-live-logs.md)**.
 
 ## 1. Overview
 
