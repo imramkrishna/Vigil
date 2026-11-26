@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   X,
   Copy,
@@ -101,6 +101,7 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
   const [fetchedLogs, setFetchedLogs] = useState<Log[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [logsError, setLogsError] = useState<string | null>(null);
+  const logQueryGeneration = useRef(0);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -152,58 +153,54 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
     return entries.map(mapServiceLog);
   }, [selectedService, windowMode, levelFilter, keyword]);
 
-  const loadLogs = useCallback(async () => {
+  const runLogsQuery = useCallback(async (manual = false) => {
     if (!selectedService) return;
-    setLoadingLogs(true);
+    const generation = ++logQueryGeneration.current;
+    setLoadingLogs(manual);
     setLogsError(null);
     try {
       const mapped = await fetchLogsOnce();
+      if (generation !== logQueryGeneration.current) return;
       if (mapped) setFetchedLogs(mapped);
     } catch (err) {
-      setLogsError(
-        err instanceof Error ? err.message : "Failed to fetch logs."
-      );
+      if (generation === logQueryGeneration.current) {
+        setLogsError(
+          err instanceof Error ? err.message : "Failed to fetch logs."
+        );
+      }
     } finally {
-      setLoadingLogs(false);
+      if (generation === logQueryGeneration.current) {
+        setLoadingLogs(false);
+      }
     }
   }, [selectedService, fetchLogsOnce]);
+
+  const loadLogs = useCallback(() => runLogsQuery(true), [runLogsQuery]);
 
   // Fetch on parameter change & poll every 6s in live mode when drawer is open
   useEffect(() => {
     if (!isOpen || !selectedService) return;
-    let cancelled = false;
 
     const run = () => {
-      fetchLogsOnce()
-        .then((mapped) => {
-          if (cancelled) return;
-          setLogsError(null);
-          if (mapped) setFetchedLogs(mapped);
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          setLogsError(
-            err instanceof Error ? err.message : "Failed to fetch logs."
-          );
-        });
+      void runLogsQuery();
     };
 
     run();
     if (windowMode !== "live") {
       return () => {
-        cancelled = true;
+        logQueryGeneration.current += 1;
       };
     }
     const interval = setInterval(run, 6000);
     return () => {
-      cancelled = true;
+      logQueryGeneration.current += 1;
       clearInterval(interval);
     };
-  }, [isOpen, selectedService, windowMode, fetchLogsOnce]);
+  }, [isOpen, selectedService, windowMode, runLogsQuery]);
 
   if (!isOpen) return null;
 
-  const displayedLogs = fetchedLogs.length > 0 ? fetchedLogs : liveLogs;
+  const displayedLogs = selectedService ? fetchedLogs : liveLogs;
   const total = citations.length + displayedLogs.length + deployDiffs.length;
   const tabs: { id: Tab; label: string; n: number }[] = [
     { id: "all", label: "All", n: total },

@@ -144,9 +144,9 @@ const SECRET_PATTERNS: Array<[RegExp, string]> = [
   [/\b(?:sk|pk|rk)_(?:live|test|or|proj)?[-_A-Za-z0-9]{16,}\b/g, "[REDACTED_API_KEY]"],
   [/\brnd_[A-Za-z0-9]{16,}\b/g, "[REDACTED_RENDER_KEY]"],
   [/\bvgl_ing_[A-Za-z0-9_-]{16,}\b/g, "[REDACTED_INGEST_KEY]"],
-  // Generic key=value / "secret": "..." patterns
+  // Generic key=value / "secret": "..." patterns (supports quoted JSON keys and unquoted k=v)
   [
-    /((?:password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key)\s*[:=]\s*["']?)([^"'\s,&;}]{6,})/gi,
+    /((?:password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key)["']?\s*[:=]\s*["']?)([^"'\s,&;}]{6,})/gi,
     "$1[REDACTED]",
   ],
 ];

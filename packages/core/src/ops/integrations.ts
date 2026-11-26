@@ -318,8 +318,29 @@ export async function ingestServiceLogs(params: {
           platform: "vps",
           platformConfig: { platform: "vps" },
         })
+        .onConflictDoNothing({
+          target: [opsServices.orgId, opsServices.name],
+        })
         .returning({ id: opsServices.id });
-      svc = created!;
+
+      if (created) {
+        svc = created;
+      } else {
+        const [existing] = await tx
+          .select({ id: opsServices.id })
+          .from(opsServices)
+          .where(
+            and(
+              eq(opsServices.orgId, params.orgId),
+              eq(opsServices.name, cleanName)
+            )
+          )
+          .limit(1);
+        if (!existing) {
+          throw new Error(`Failed to resolve service "${cleanName}" during log ingestion.`);
+        }
+        svc = existing;
+      }
     }
 
     const capped = params.logs.slice(0, 500);
@@ -364,6 +385,11 @@ function normalizeServiceLogLevel(raw?: string): ServiceLogLevel {
 export async function pruneExpiredServiceLogs(
   retentionDays = 14
 ): Promise<number> {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
+    throw new RangeError(
+      `Invalid retentionDays (${String(retentionDays)}): must be a finite positive number.`
+    );
+  }
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
   const res = await db
     .delete(opsServiceLogs)

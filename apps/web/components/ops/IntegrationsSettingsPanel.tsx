@@ -91,6 +91,9 @@ export function IntegrationsSettingsPanel({
   const [testingId, setTestingId] = useState<string | null>(null);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
   const [newIngestToken, setNewIngestToken] = useState<string | null>(null);
+  const [savedAwsExternalId, setSavedAwsExternalId] = useState<string | null>(
+    null
+  );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadIntegrations = async () => {
@@ -152,22 +155,42 @@ export function IntegrationsSettingsPanel({
     projectId.trim() || "<YOUR_PROJECT_ID>"
   } --member="serviceAccount:${vigilSaEmail}" --role="roles/logging.viewer"`;
 
-  const awsTrustPolicy = JSON.stringify(
-    {
-      Version: "2012-10-17",
-      Statement: [
-        {
-          Effect: "Allow",
-          Principal: { AWS: `arn:aws:iam::${vigilAwsAccountId}:root` },
-          Action: "sts:AssumeRole",
-          Condition: {
-            StringEquals: { "sts:ExternalId": "<GENERATED_EXTERNAL_ID>" },
+  const buildAwsTrustPolicy = (externalId: string) =>
+    JSON.stringify(
+      {
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Effect: "Allow",
+            Principal: { AWS: `arn:aws:iam::${vigilAwsAccountId}:root` },
+            Action: "sts:AssumeRole",
+            Condition: {
+              StringEquals: { "sts:ExternalId": externalId },
+            },
           },
-        },
-      ],
-    },
-    null,
-    2
+        ],
+      },
+      null,
+      2
+    );
+
+  const activeAwsExternalId =
+    savedAwsExternalId ||
+    (() => {
+      const existingAws = integrations.find(
+        (i) =>
+          i.provider === "aws" &&
+          i.authMethod === "sts_assume_role" &&
+          typeof i.publicConfig?.externalId === "string" &&
+          i.publicConfig.externalId.trim() !== ""
+      );
+      return typeof existingAws?.publicConfig?.externalId === "string"
+        ? existingAws.publicConfig.externalId
+        : null;
+    })();
+
+  const awsTrustPolicy = buildAwsTrustPolicy(
+    activeAwsExternalId ?? "<SAVE_TO_GENERATE_EXTERNAL_ID>"
   );
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -202,9 +225,22 @@ export function IntegrationsSettingsPanel({
       setIntegrations((prev) => [res.integration, ...prev]);
       setName("");
       setSecret("");
+      const createdExternalId =
+        res.integration.provider === "aws" &&
+        res.integration.authMethod === "sts_assume_role" &&
+        typeof res.integration.publicConfig?.externalId === "string"
+          ? res.integration.publicConfig.externalId
+          : null;
+      if (createdExternalId) {
+        setSavedAwsExternalId(createdExternalId);
+      }
       if (res.oneTimeIngestToken) {
         setNewIngestToken(res.oneTimeIngestToken);
         onNotice("VPS ingest token generated. Copy it now — it won't be shown again.");
+      } else if (createdExternalId && !res.testResult?.ok) {
+        onNotice(
+          `Saved "${res.integration.name}". Copy the trust policy with your ExternalId, install it on your IAM role, then click Test.`
+        );
       } else if (res.testResult?.ok) {
         onNotice(`Connected "${res.integration.name}" successfully.`);
       } else {
@@ -467,12 +503,21 @@ export function IntegrationsSettingsPanel({
                 <div className="rounded-xl border border-white/[0.07] bg-[#141519] p-3.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[12px] font-medium text-[#c9cbd3]">
-                      Trust policy (attach logs:FilterLogEvents &amp; logs:DescribeLogStreams)
+                      {activeAwsExternalId
+                        ? "Trust policy (install on your IAM role, then click Test)"
+                        : "Save the integration first to generate your unique sts:ExternalId"}
                     </span>
                     <button
                       type="button"
-                      onClick={() => copyText("aws-trust", awsTrustPolicy)}
-                      className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11.5px] text-[#9b9da6] hover:bg-white/[0.06] hover:text-[#f2f2f4]"
+                      disabled={!activeAwsExternalId}
+                      onClick={() => {
+                        if (!activeAwsExternalId) return;
+                        copyText("aws-trust", buildAwsTrustPolicy(activeAwsExternalId));
+                        onNotice(
+                          "Trust policy copied. Install it on your IAM role and click Test."
+                        );
+                      }}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11.5px] text-[#9b9da6] hover:bg-white/[0.06] hover:text-[#f2f2f4] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {copiedCmd === "aws-trust" ? (
                         <Check className="h-3.5 w-3.5 text-emerald-400" />
@@ -712,6 +757,37 @@ export function IntegrationsSettingsPanel({
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
+                    {item.provider === "aws" &&
+                      item.authMethod === "sts_assume_role" &&
+                      typeof item.publicConfig?.externalId === "string" &&
+                      item.publicConfig.externalId.trim() !== "" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            copyText(
+                              `aws-trust-${item.id}`,
+                              buildAwsTrustPolicy(
+                                String(item.publicConfig.externalId)
+                              )
+                            );
+                            onNotice(
+                              "Trust policy copied. Install it on your IAM role and click Test."
+                            );
+                          }}
+                          className="dash-btn-ghost !py-1.5 !text-[12px]"
+                        >
+                          {copiedCmd === `aws-trust-${item.id}` ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                          <span>
+                            {copiedCmd === `aws-trust-${item.id}`
+                              ? "Copied"
+                              : "Copy policy"}
+                          </span>
+                        </button>
+                      )}
                     <button
                       type="button"
                       disabled={testingId === item.id}

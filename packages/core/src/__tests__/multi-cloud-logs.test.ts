@@ -9,6 +9,7 @@ import {
   formatGcpLogEntry,
   generateIngestToken,
   isBlockedIp,
+  pruneExpiredServiceLogs,
   redactLogMessage,
   SsrfBlockedError,
   toPublicIntegration,
@@ -70,20 +71,34 @@ describe("Spec 12: Security — AES-256-GCM Crypto & Ingest Tokens", () => {
 });
 
 describe("Spec 12: Security — Secret Redaction & Masking", () => {
-  it("redacts Bearer tokens, AWS keys, GitHub PATs, and caps length", () => {
+  it("redacts Bearer tokens, AWS keys, GitHub PATs, JSON secrets, and caps length", () => {
     const raw =
       "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTYifQ.abcDEF123456 " +
-      "aws=AKIAIOSFODNN7EXAMPLE gh=ghp_1234567890abcdefghij1234567890 password=supersecretvalue";
+      'aws=AKIAIOSFODNN7EXAMPLE gh=ghp_1234567890abcdefghij1234567890 password=supersecretvalue ' +
+      '{"password":"compactjsonsecret","api_key": "spacedjsonsecret"}';
     const clean = redactLogMessage(raw);
     assert.ok(!clean.includes("AKIAIOSFODNN7EXAMPLE"));
     assert.ok(!clean.includes("ghp_1234567890abcdefghij1234567890"));
     assert.ok(!clean.includes("supersecretvalue"));
-    assert.ok(clean.includes("[REDACTED"));
+    assert.ok(!clean.includes("compactjsonsecret"));
+    assert.ok(!clean.includes("spacedjsonsecret"));
+    assert.ok(clean.includes('"password":"[REDACTED]"'));
+    assert.ok(clean.includes('"api_key": "[REDACTED]"'));
 
     const longLine = "a".repeat(5000);
     const capped = redactLogMessage(longLine);
     assert.ok(capped.length <= 4020);
     assert.ok(capped.endsWith("…[truncated]"));
+  });
+
+  it("rejects non-finite or non-positive retentionDays in pruneExpiredServiceLogs", async () => {
+    await assert.rejects(() => pruneExpiredServiceLogs(0), RangeError);
+    await assert.rejects(() => pruneExpiredServiceLogs(-7), RangeError);
+    await assert.rejects(() => pruneExpiredServiceLogs(Number.NaN), RangeError);
+    await assert.rejects(
+      () => pruneExpiredServiceLogs(Number.POSITIVE_INFINITY),
+      RangeError
+    );
   });
 
   it("strips encryptedSecret from public integration DTOs", () => {

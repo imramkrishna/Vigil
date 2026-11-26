@@ -8,8 +8,37 @@ import {
 const MAX_BATCH_SIZE = 500;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 120;
+const SERVICE_LOG_LEVELS = new Set(["debug", "info", "warn", "error", "fatal"]);
 
 const orgRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isIngestLogInput(value: unknown): value is IngestLogInput {
+  if (!isRecord(value) || typeof value.message !== "string") {
+    return false;
+  }
+
+  if ("timestamp" in value && typeof value.timestamp !== "string") {
+    return false;
+  }
+  if (
+    "level" in value &&
+    (typeof value.level !== "string" || !SERVICE_LOG_LEVELS.has(value.level))
+  ) {
+    return false;
+  }
+  if ("traceId" in value && typeof value.traceId !== "string") {
+    return false;
+  }
+  if ("metadata" in value && !isRecord(value.metadata)) {
+    return false;
+  }
+
+  return true;
+}
 
 function checkOrgRateLimit(orgId: string): boolean {
   const now = Date.now();
@@ -51,26 +80,36 @@ export async function ingestLogsController(req: Request, res: Response) {
       return;
     }
 
-    const body = req.body as {
-      service?: string;
-      logs?: IngestLogInput[];
-    };
+    const body: unknown = req.body;
+    if (!isRecord(body)) {
+      res.status(400).json({ error: "Request body must be an object." });
+      return;
+    }
 
-    if (!body?.service || !body.service.trim()) {
+    if (typeof body.service !== "string" || !body.service.trim()) {
       res.status(400).json({ error: "Field 'service' is required." });
       return;
     }
 
-    if (!Array.isArray(body.logs) || body.logs.length === 0) {
+    const logs = body.logs;
+    if (!Array.isArray(logs) || logs.length === 0) {
       res
         .status(400)
         .json({ error: "Field 'logs' must be a non-empty array of log entries." });
       return;
     }
 
-    if (body.logs.length > MAX_BATCH_SIZE) {
+    if (logs.length > MAX_BATCH_SIZE) {
       res.status(400).json({
         error: `Batch size exceeds maximum of ${MAX_BATCH_SIZE} log lines per request.`,
+      });
+      return;
+    }
+
+    if (!logs.every(isIngestLogInput)) {
+      res.status(400).json({
+        error:
+          "Each log entry must be an object with a string message and valid optional fields.",
       });
       return;
     }
@@ -79,7 +118,7 @@ export async function ingestLogsController(req: Request, res: Response) {
       orgId: authMatch.orgId,
       integrationId: authMatch.integrationId,
       serviceName: body.service,
-      logs: body.logs,
+      logs,
     });
 
     res.status(202).json({

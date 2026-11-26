@@ -8,6 +8,7 @@ import {
   opsDeploys,
   opsPastIncidents,
   opsServices,
+  orgIntegrations,
   withOrgContext,
   type ApprovalDecision,
   type DeploymentPlatform,
@@ -384,6 +385,25 @@ export async function upsertOpsService(params: {
   platformConfig?: PlatformConfig;
 }) {
   return withOrgContext(params.orgId, async (tx) => {
+    if (params.integrationId) {
+      const [owned] = await tx
+        .select({ id: orgIntegrations.id })
+        .from(orgIntegrations)
+        .where(
+          and(
+            eq(orgIntegrations.id, params.integrationId),
+            eq(orgIntegrations.orgId, params.orgId)
+          )
+        )
+        .limit(1);
+
+      if (!owned) {
+        throw new Error(
+          "Invalid integrationId: integration not found in this organization."
+        );
+      }
+    }
+
     const [row] = await tx
       .insert(opsServices)
       .values({

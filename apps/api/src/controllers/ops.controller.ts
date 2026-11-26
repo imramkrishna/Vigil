@@ -113,7 +113,8 @@ export async function upsertServiceController(req: Request, res: Response) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to save service";
-    res.status(500).json({ error: message });
+    const status = message.startsWith("Invalid integrationId") ? 400 : 500;
+    res.status(status).json({ error: message });
   }
 }
 
@@ -196,6 +197,7 @@ export async function getLogsController(req: Request, res: Response) {
           orgId,
           service,
           level,
+          keyword,
           lines: lines ?? limit ?? 30,
         })
       : await getLogsByTimestamp({
