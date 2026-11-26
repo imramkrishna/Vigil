@@ -1,5 +1,13 @@
-import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { S3 } from "./s3.config";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+
+export const S3 = new S3Client({
+  region: "auto",
+  endpoint: process.env.S3_API!,
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
+  },
+});
 
 function generateKey(fileName: string): string {
   const timestamp = new Date()

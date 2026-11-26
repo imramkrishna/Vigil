@@ -1,8 +1,10 @@
 import { and, desc, eq } from "drizzle-orm";
-import { documentChunks, documents, withOrgContext } from "../db";
-import type { ChunkMetadata } from "../db/schema";
-
-// ─── Document Queries ─────────────────────────────────────────────
+import {
+  documentChunks,
+  documents,
+  withOrgContext,
+  type ChunkMetadata,
+} from "../db";
 
 export async function checkIfDocumentExists(
   orgId: string,
@@ -100,9 +102,7 @@ export async function markDocumentIndexed(
         updatedAt: new Date(),
         errorMessage: null,
       })
-      .where(
-        and(eq(documents.id, documentId), eq(documents.orgId, orgId))
-      );
+      .where(and(eq(documents.id, documentId), eq(documents.orgId, orgId)));
   });
 }
 
@@ -119,9 +119,7 @@ export async function markDocumentFailed(
         errorMessage,
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(documents.id, documentId), eq(documents.orgId, orgId))
-      );
+      .where(and(eq(documents.id, documentId), eq(documents.orgId, orgId)));
   });
 }
 
@@ -150,8 +148,6 @@ export async function listDocuments(orgId: string) {
   });
 }
 
-// ─── Delete Queries ───────────────────────────────────────────────
-
 /**
  * Deletes a document and all associated chunks for an organization.
  */
@@ -166,9 +162,7 @@ export async function deleteDocument(
         storageKey: documents.storageKey,
       })
       .from(documents)
-      .where(
-        and(eq(documents.id, documentId), eq(documents.orgId, orgId))
-      )
+      .where(and(eq(documents.id, documentId), eq(documents.orgId, orgId)))
       .limit(1);
 
     if (ownedDocument.length === 0) {
@@ -186,9 +180,7 @@ export async function deleteDocument(
 
     const deleted = await tx
       .delete(documents)
-      .where(
-        and(eq(documents.id, documentId), eq(documents.orgId, orgId))
-      )
+      .where(and(eq(documents.id, documentId), eq(documents.orgId, orgId)))
       .returning({
         id: documents.id,
         storageKey: documents.storageKey,

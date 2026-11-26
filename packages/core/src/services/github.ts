@@ -1,9 +1,15 @@
-import { createOctokit } from "../config/octokit";
+import { Octokit } from "@octokit/rest";
 import {
   getOrgGitHubToken,
   getServiceByName,
   listOpsServices,
 } from "./queries";
+
+export function createOctokit(githubToken?: string) {
+  return new Octokit({
+    auth: githubToken || process.env.GITHUB_TOKEN,
+  });
+}
 
 export interface GitHubCommitDeploy {
   service: string;
@@ -48,7 +54,7 @@ export async function fetchGitHubCommitsForRepo(params: {
       per_page: limit,
     });
 
-    const results: GitHubCommitDeploy[] = await Promise.all(
+    return await Promise.all(
       commits.slice(0, limit).map(async (c) => {
         const shortSha = c.sha.slice(0, 7);
         const firstLine = c.commit.message.split("\n")[0] ?? "";
@@ -89,8 +95,6 @@ export async function fetchGitHubCommitsForRepo(params: {
         };
       })
     );
-
-    return results;
   } catch {
     return [];
   }
@@ -155,36 +159,6 @@ export async function fetchGitHubFileContent(params: {
       return Buffer.from(data.content, "base64").toString("utf-8");
     }
     return null;
-  } catch {
-    return null;
-  }
-}
-
-export async function createGitHubIssueForRepo(params: {
-  repoUrl: string;
-  title: string;
-  body: string;
-  labels?: string[];
-  githubToken?: string;
-}): Promise<{ number: number; url: string } | null> {
-  const parsed = parseGitHubRepo(params.repoUrl);
-  if (!parsed) return null;
-
-  const octokit = createOctokit(params.githubToken);
-
-  try {
-    const { data } = await octokit.rest.issues.create({
-      owner: parsed.owner,
-      repo: parsed.repo,
-      title: params.title,
-      body: params.body,
-      labels: params.labels,
-    });
-
-    return {
-      number: data.number,
-      url: data.html_url,
-    };
   } catch {
     return null;
   }

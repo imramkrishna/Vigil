@@ -157,13 +157,11 @@ export async function createOrgIntegration(params: {
     encryptedSecret = encrypted.ciphertext;
     keyVersion = encrypted.keyVersion;
   } else if (params.authMethod === "sts_assume_role") {
-    // Generate a unique per-org ExternalId if not provided
     if (!publicConfig.externalId) {
       publicConfig.externalId = `vigil-${params.orgId.slice(0, 8)}-${crypto.randomBytes(6).toString("hex")}`;
     }
     encryptedSecret = null;
   } else {
-    // iam_delegation stores no secret in Postgres
     encryptedSecret = null;
   }
 
@@ -246,8 +244,6 @@ export function decryptIntegrationSecret(row: OrgIntegration): string | null {
 
 /**
  * Authenticates an incoming `X-Vigil-Ingest-Key` header for `POST /api/ingest/logs`.
- * Uses a SECURITY DEFINER or direct lookup by SHA-256 hash. Since ingest requests
- * arrive without a user session, we look up the hashed token directly.
  */
 export async function resolveIngestTokenIntegration(
   rawToken: string
@@ -398,7 +394,6 @@ export async function pruneExpiredServiceLogs(
   return res.length;
 }
 
-/** Ensures Forced RLS policies exist for integrations tables (used in migrations/tests). */
 export async function countOrgIntegrationsRaw(): Promise<number> {
   const res = await db.execute(
     sql`SELECT count(*)::int AS count FROM org_integrations`

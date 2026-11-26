@@ -1,5 +1,5 @@
 import type { ChatMode } from "../db";
-import { getModel } from "../model-layer";
+import { getModel } from "../llm";
 import { updateConversationTitle } from "./queries";
 
 function fallbackTitleFromMessage(userMessage: string): string {
@@ -19,11 +19,6 @@ function sanitizeGeneratedTitle(raw: string, fallback: string): string {
   return firstLine.length > 72 ? `${firstLine.slice(0, 69)}…` : firstLine;
 }
 
-/**
- * Generates a concise operational title (3–7 words) from the conversation's
- * opening message using the fast model tier, and persists it to `conversations.title`.
- * Falls back safely to a cleaned slice of `userMessage` if the LLM call fails.
- */
 export async function generateAndUpdateChatTitle(params: {
   orgId: string;
   conversationId: string;
@@ -85,7 +80,6 @@ export async function generateAndUpdateChatTitle(params: {
 
     title = sanitizeGeneratedTitle(rawText, fallback);
   } catch {
-    // Keep deterministic fallback title if LLM call fails or budget is exceeded
     title = fallback;
   }
 

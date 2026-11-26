@@ -8,8 +8,9 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
-import { user } from "./auth-schema";
-import { incidents, orgs } from "./schema";
+import { user } from "./auth";
+import { incidents } from "./incidents";
+import { orgs } from "./tenancy";
 
 export const CHAT_MODES = ["incident"] as const;
 export type ChatMode = (typeof CHAT_MODES)[number];
@@ -46,10 +47,6 @@ export interface ChatMessageMetadata {
   hypotheses?: ChatHypothesis[];
   suggestedFixes?: ChatSuggestedFix[];
 }
-
-/* -------------------------------------------------------------------------- */
-/* Conversations & Messages (Multi-tenant, Forced RLS on org_id)              */
-/* -------------------------------------------------------------------------- */
 
 export const conversations = pgTable(
   "conversations",

@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { Document } from "@langchain/core/documents";
-import type { ChunkMetadata } from "../db/schema";
 import { PDFParse } from "pdf-parse";
-import { getEmbeddingModel } from "../model-layer";
+import type { ChunkMetadata } from "../db/schema";
+import { getEmbeddingModel } from "../llm";
 
 export type chunkMetadata = ChunkMetadata;
 
@@ -19,6 +19,7 @@ const splitter = new RecursiveCharacterTextSplitter({
   chunkSize: 1200,
   chunkOverlap: 150,
 });
+
 /**
  * Generates a deterministic 64-character SHA-256 hex digest of document content.
  */
@@ -37,17 +38,14 @@ export async function getTextFromUrl(sourceUrl: string): Promise<string> {
   const response = await fetch(sourceUrl);
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch document from URL (${response.status} ${response.statusText}): ${sourceUrl}`,
+      `Failed to fetch document from URL (${response.status} ${response.statusText}): ${sourceUrl}`
     );
   }
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer).toString("utf-8");
 }
 
-export async function processPdf(
-  documentUrl: string,
-  documentId?: string,
-) {
+export async function processPdf(documentUrl: string, documentId?: string) {
   const parser = new PDFParse({
     url: documentUrl,
   });
@@ -55,34 +53,35 @@ export async function processPdf(
   try {
     const result = await parser.getText();
     const pages = result.pages;
-    const pageDocuments = pages.map((page) => {
-      return new Document({
-        pageContent: page.text,
-        metadata: {
-          page: page.num,
-          sourceUrl: documentUrl,
-          documentId,
-        },
-      });
-    });
-    return pageDocuments;
+    return pages.map(
+      (page) =>
+        new Document({
+          pageContent: page.text,
+          metadata: {
+            page: page.num,
+            sourceUrl: documentUrl,
+            documentId,
+          },
+        })
+    );
   } finally {
     await parser.destroy();
   }
 }
+
 export async function generateChunks(
-  documentText: Document[],
+  documentText: Document[]
 ): Promise<Document[]> {
   const chunks = await splitter.splitDocuments(documentText);
   const totalChunks = chunks.length;
 
-  return chunks.map((chunk, chunkIndex) => {
-    chunk.metadata = {
-      ...chunk.metadata,
+  return chunks.map((chunkItem, chunkIndex) => {
+    chunkItem.metadata = {
+      ...chunkItem.metadata,
       chunkIndex,
       totalChunks,
     };
-    return chunk;
+    return chunkItem;
   });
 }
 
@@ -93,7 +92,7 @@ export async function embedChunks(chunks: Document[]) {
   for (let i = 0; i < chunks.length; i += batchSize) {
     const batch = chunks.slice(i, i + batchSize);
     const batchEmbeddings = await embeddingModel.embedDocuments(
-      batch.map((chunk) => chunk.pageContent),
+      batch.map((c) => c.pageContent)
     );
     embeddings.push(...batchEmbeddings);
   }

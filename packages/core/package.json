@@ -2,7 +2,16 @@
   "name": "@vigil/core",
   "version": "1.0.0",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./db": "./src/db/index.ts",
+    "./llm": "./src/llm/index.ts",
+    "./security": "./src/security/index.ts",
+    "./runbooks": "./src/runbooks/index.ts",
+    "./integrations": "./src/integrations/index.ts",
+    "./services": "./src/services/index.ts",
+    "./logs": "./src/logs/index.ts",
+    "./incidents": "./src/incidents/index.ts",
+    "./chats": "./src/chats/index.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",

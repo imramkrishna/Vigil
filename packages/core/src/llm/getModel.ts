@@ -115,4 +115,3 @@ export function getModel(tier: modelTier, opts: GetModelOptions = {}) {
   const { primary, fallback } = createTierModels(tier, opts);
   return primary.withFallbacks({ fallbacks: [fallback] });
 }
-

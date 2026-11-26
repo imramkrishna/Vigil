@@ -7,7 +7,7 @@ const embeddingModel = "openai/text-embedding-3-small";
 export function getEmbeddingModel(): OpenAIEmbeddings {
   const apiKey = resolveOpenRouterApiKey();
 
-  const model = new OpenAIEmbeddings({
+  return new OpenAIEmbeddings({
     model: embeddingModel,
     dimensions: EMBEDDING_DIMENSIONS,
     apiKey,
@@ -18,8 +18,6 @@ export function getEmbeddingModel(): OpenAIEmbeddings {
       apiKey,
     },
   });
-
-  return model;
 }
 
 export const getEmbeddings = getEmbeddingModel;

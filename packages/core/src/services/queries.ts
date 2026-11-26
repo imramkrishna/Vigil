@@ -1,19 +1,18 @@
 import { and, desc, eq, ilike } from "drizzle-orm";
 import {
   account,
-  incidents,
   members,
   opsDeploys,
   opsServices,
   orgIntegrations,
   withOrgContext,
   type DeploymentPlatform,
-  type IncidentStatus,
   type PlatformConfig,
-  type Severity,
 } from "../db";
 
-export async function getOrgGitHubToken(orgId: string): Promise<string | undefined> {
+export async function getOrgGitHubToken(
+  orgId: string
+): Promise<string | undefined> {
   try {
     return await withOrgContext(orgId, async (tx) => {
       const [row] = await tx
@@ -40,8 +39,8 @@ export async function getServiceByName(orgId: string, serviceName: string) {
       .where(
         and(
           eq(opsServices.orgId, orgId),
-          ilike(opsServices.name, `%${serviceName.trim()}%`),
-        ),
+          ilike(opsServices.name, `%${serviceName.trim()}%`)
+        )
       )
       .limit(5);
   });
@@ -50,7 +49,7 @@ export async function getServiceByName(orgId: string, serviceName: string) {
 export async function getRecentDeploys(
   orgId: string,
   serviceName?: string,
-  limit = 10,
+  limit = 10
 ) {
   return withOrgContext(orgId, async (tx) => {
     if (serviceName?.trim()) {
@@ -60,8 +59,8 @@ export async function getRecentDeploys(
         .where(
           and(
             eq(opsDeploys.orgId, orgId),
-            ilike(opsDeploys.service, `%${serviceName.trim()}%`),
-          ),
+            ilike(opsDeploys.service, `%${serviceName.trim()}%`)
+          )
         )
         .orderBy(desc(opsDeploys.deployedAt))
         .limit(limit);
@@ -73,72 +72,6 @@ export async function getRecentDeploys(
       .where(eq(opsDeploys.orgId, orgId))
       .orderBy(desc(opsDeploys.deployedAt))
       .limit(limit);
-  });
-}
-
-// ─── Incident Helpers ──────────────────────────────────────────────
-
-export async function getIncidentById(orgId: string, incidentId: string) {
-  return withOrgContext(orgId, async (tx) => {
-    const [row] = await tx
-      .select()
-      .from(incidents)
-      .where(
-        and(eq(incidents.id, incidentId), eq(incidents.orgId, orgId))
-      )
-      .limit(1);
-    return row ?? null;
-  });
-}
-
-export async function updateIncidentStatus(
-  orgId: string,
-  incidentId: string,
-  status: IncidentStatus
-): Promise<void> {
-  await withOrgContext(orgId, async (tx) => {
-    await tx
-      .update(incidents)
-      .set({
-        status,
-        ...(status === "resolved" ? { resolvedAt: new Date() } : {}),
-      })
-      .where(
-        and(eq(incidents.id, incidentId), eq(incidents.orgId, orgId))
-      );
-  });
-}
-
-export async function createIncident(params: {
-  orgId: string;
-  threadId: string;
-  title: string;
-  severity: Severity;
-  openedBy?: string;
-}) {
-  return withOrgContext(params.orgId, async (tx) => {
-    const [created] = await tx
-      .insert(incidents)
-      .values({
-        orgId: params.orgId,
-        threadId: params.threadId,
-        title: params.title,
-        severity: params.severity,
-        status: "investigating",
-        openedBy: params.openedBy ?? null,
-      })
-      .returning();
-    return created!;
-  });
-}
-
-export async function listIncidents(orgId: string) {
-  return withOrgContext(orgId, async (tx) => {
-    return tx
-      .select()
-      .from(incidents)
-      .where(eq(incidents.orgId, orgId))
-      .orderBy(desc(incidents.openedAt));
   });
 }
 

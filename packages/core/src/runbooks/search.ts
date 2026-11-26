@@ -1,7 +1,6 @@
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
-import { documentChunks, withOrgContext } from "../db";
-import { getEmbeddingModel } from "../model-layer";
-import type { ChunkMetadata } from "../db/schema";
+import { documentChunks, withOrgContext, type ChunkMetadata } from "../db";
+import { getEmbeddingModel } from "../llm";
 
 const RRF_K = 60;
 
@@ -17,7 +16,7 @@ export type SearchResult = {
 export async function semanticSearch(
   orgId: string,
   query: string,
-  limit = 20,
+  limit = 20
 ): Promise<SearchResult[]> {
   if (limit <= 0) return [];
 
@@ -30,7 +29,7 @@ export async function semanticSearch(
   return withOrgContext(orgId, async (tx) => {
     const vector = sql`${JSON.stringify(queryEmbedding)}::vector`;
     const distance = sql<number>`${documentChunks.embedding} <=> ${vector}`;
-    const rows = await tx
+    return tx
       .select({
         id: documentChunks.id,
         documentId: documentChunks.documentId,
@@ -43,20 +42,18 @@ export async function semanticSearch(
       .where(
         and(
           eq(documentChunks.orgId, orgId),
-          isNotNull(documentChunks.embedding),
-        ),
+          isNotNull(documentChunks.embedding)
+        )
       )
       .orderBy(distance)
       .limit(limit);
-
-    return rows;
   });
 }
 
 export async function textSearch(
   orgId: string,
   query: string,
-  limit = 20,
+  limit = 20
 ): Promise<SearchResult[]> {
   if (limit <= 0) return [];
 
@@ -64,7 +61,7 @@ export async function textSearch(
     const queryVector = sql`plainto_tsquery('english', ${query})`;
     const rank = sql<number>`${documentChunks.tsv} @@ ${queryVector}`;
     const score = sql<number>`ts_rank_cd(${documentChunks.tsv}, ${queryVector})`;
-    const rows = await tx
+    return tx
       .select({
         id: documentChunks.id,
         documentId: documentChunks.documentId,
@@ -78,20 +75,18 @@ export async function textSearch(
         and(
           eq(documentChunks.orgId, orgId),
           isNotNull(documentChunks.tsv),
-          rank,
-        ),
+          rank
+        )
       )
       .orderBy(desc(score))
       .limit(limit);
-
-    return rows;
   });
 }
 
 export async function hybridSearch(
   orgId: string,
   query: string,
-  limit = 20,
+  limit = 20
 ): Promise<SearchResult[]> {
   if (limit <= 0) return [];
 
