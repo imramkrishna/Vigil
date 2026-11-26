@@ -1,25 +1,20 @@
-import crypto from "node:crypto";
 import { z } from "zod";
 import { createTierModels } from "@vigil/core";
 import { FORM_HYPOTHESES_SYSTEM_PROMPT } from "../systemPrompts";
 import {
+  CitationSchema,
   HypothesisSchema,
+  SuggestedFixSchema,
   type VigilStateType,
   type VigilUpdateType,
 } from "../state";
 
-const IncidentAnalysisOutputSchema = z.object({
+const EvaluationOutputSchema = z.object({
+  summary: z.string(),
+  confidence: z.enum(["high", "medium", "low"]),
   hypotheses: z.array(HypothesisSchema),
-  proposedAction: z
-    .object({
-      kind: z.enum(["create_ticket", "post_status", "schedule_followup"]),
-      title: z.string(),
-      target: z.string(),
-      payload: z.record(z.string(), z.unknown()),
-      rationale: z.string(),
-      evidenceIds: z.array(z.string()),
-    })
-    .nullable(),
+  suggestedFixes: z.array(SuggestedFixSchema),
+  citations: z.array(CitationSchema),
 });
 
 export async function formHypotheses(
@@ -33,9 +28,9 @@ export async function formHypotheses(
   });
 
   const model = primary
-    .withStructuredOutput(IncidentAnalysisOutputSchema)
+    .withStructuredOutput(EvaluationOutputSchema)
     .withFallbacks({
-      fallbacks: [fallback.withStructuredOutput(IncidentAnalysisOutputSchema)],
+      fallbacks: [fallback.withStructuredOutput(EvaluationOutputSchema)],
     });
 
   const result = await model.invoke([
@@ -54,22 +49,18 @@ export async function formHypotheses(
     },
   ]);
 
-  const proposedAction = result.proposedAction
-    ? {
-        ...result.proposedAction,
-        idempotencyKey: `${state.threadId}:${result.proposedAction.kind}:${crypto
-          .createHash("sha256")
-          .update(result.proposedAction.title)
-          .digest("hex")
-          .slice(0, 12)}`,
-      }
-    : null;
-
   return {
+    answer: result.summary,
+    confidence: result.confidence,
     hypotheses: result.hypotheses,
-    proposedAction,
+    suggestedFixes: result.suggestedFixes,
+    citations: result.citations,
     timeline: [
-      `Generated ${result.hypotheses.length} hypotheses${proposedAction ? ` and proposed action '${proposedAction.title}'` : ""}`,
+      `Evaluated failure: ${result.hypotheses.length} root-cause ${
+        result.hypotheses.length === 1 ? "hypothesis" : "hypotheses"
+      }, ${result.suggestedFixes.length} suggested ${
+        result.suggestedFixes.length === 1 ? "fix" : "fixes"
+      }`,
     ],
   };
 }

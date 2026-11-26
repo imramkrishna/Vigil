@@ -4,7 +4,7 @@ import { updateConversationTitle } from "./queries";
 
 function fallbackTitleFromMessage(userMessage: string): string {
   const clean = userMessage.replace(/\s+/g, " ").trim();
-  if (!clean) return "New chat";
+  if (!clean) return "New evaluation";
   return clean.length > 60 ? `${clean.slice(0, 57)}…` : clean;
 }
 
@@ -38,14 +38,14 @@ export async function generateAndUpdateChatTitle(params: {
   try {
     const model = getModel("fast", {
       orgId: params.orgId,
-      graph: params.mode ?? "ask",
+      graph: params.mode ?? "incident",
       threadId: params.threadId,
       node: "generateChatTitle",
       temperature: 0.2,
     });
 
     const contextLines = [
-      `Mode: ${params.mode ?? "ask"}`,
+      `Mode: ${params.mode ?? "incident"}`,
       `User message: ${params.userMessage.slice(0, 400)}`,
       params.assistantResponse
         ? `Assistant summary: ${params.assistantResponse.slice(0, 300)}`

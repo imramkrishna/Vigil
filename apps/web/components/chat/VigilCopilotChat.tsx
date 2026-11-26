@@ -9,7 +9,8 @@ import {
   BookOpen,
   SquarePen,
   Flame,
-  FileText,
+  Terminal,
+  Layers,
   History,
 } from "lucide-react";
 import type {
@@ -23,7 +24,6 @@ import { PromptComposer } from "./PromptComposer";
 import { AgentTimelineTrace } from "./AgentTimelineTrace";
 import { CitationCards } from "./CitationCards";
 import { IncidentHypothesisPanel } from "./IncidentHypothesisPanel";
-import { PostmortemArtifactCard } from "./PostmortemArtifactCard";
 import { EvidenceDrawer } from "./EvidenceDrawer";
 import { MarkdownProse } from "./MarkdownProse";
 import { ServicePlatformModal } from "../ops/ServicePlatformModal";
@@ -36,7 +36,6 @@ interface VigilCopilotChatProps {
   initialConversationId?: string | null;
   initialThreadId?: string;
   initialTurns?: ChatTurn[];
-  initialMode?: Mode;
   loadingThread?: boolean;
   embedded?: boolean;
   resetSignal?: number;
@@ -52,7 +51,6 @@ interface VigilCopilotChatProps {
     title?: string;
   }) => void;
   onSendMessage?: (turn: ChatTurn) => void;
-  onApprovalDecision?: (approvalId: string, decision: "approved" | "rejected") => void;
   onServiceRegistered?: (service: ServiceRegistrationPayload) => void;
   onExportZip?: () => void;
 }
@@ -60,30 +58,27 @@ interface VigilCopilotChatProps {
 const STARTER_PROMPTS = [
   {
     label: "Investigate 502s",
-    hint: "Trace checkout-api deploys & logs",
+    hint: "Trace recent deploy diffs & live logs",
     query:
-      "Why is checkout-api returning 502s after the latest deploy? Check commit diffs and live logs.",
-    mode: "incident" as Mode,
+      "Why is checkout-api returning 502s after the latest deploy? Check commit diffs, live logs, and runbooks for a fix.",
     sev: "SEV-1" as Severity,
     icon: Flame,
   },
   {
-    label: "Payment rollback",
-    hint: "Pull steps from indexed runbooks",
+    label: "Crash after deploy",
+    hint: "Inspect error logs & rollback steps",
     query:
-      "What is the exact rollback procedure and command in our payment service runbook?",
-    mode: "ask" as Mode,
-    sev: "SEV-2" as Severity,
-    icon: BookOpen,
+      "Our latest deployment is crashing on startup. Inspect live error logs and recent commits, and suggest the safest rollback or patch.",
+    sev: "SEV-1" as Severity,
+    icon: Terminal,
   },
   {
-    label: "Draft postmortem",
-    hint: "Timeline, root cause & follow-ups",
+    label: "Latency spike",
+    hint: "Correlate config changes & runbooks",
     query:
-      "Draft a blameless postmortem for INC-2026-8841 with timeline, root cause, and action items.",
-    mode: "postmortem" as Mode,
-    sev: "SEV-1" as Severity,
-    icon: FileText,
+      "Latency spiked right after our last push. Check recent deploy diffs, service logs, and runbooks for root cause and fixes.",
+    sev: "SEV-2" as Severity,
+    icon: Layers,
   },
 ];
 
@@ -91,7 +86,6 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
   initialConversationId = null,
   initialThreadId = "",
   initialTurns = [],
-  initialMode = "ask",
   loadingThread = false,
   embedded = false,
   resetSignal = 0,
@@ -101,7 +95,6 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
   onNewChat,
   onConversationSync,
   onSendMessage,
-  onApprovalDecision,
   onServiceRegistered,
   onExportZip,
 }) => {
@@ -109,7 +102,6 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
     initialConversationId
   );
   const [threadId, setThreadId] = useState(initialThreadId);
-  const [mode, setMode] = useState<Mode>(initialMode);
   const [severity, setSeverity] = useState<Severity>("SEV-1");
   const [turns, setTurns] = useState<ChatTurn[]>(initialTurns);
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
@@ -129,7 +121,6 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
       setThreadId("");
       setTurns([]);
       setIsGenerating(false);
-      setMode("ask");
     }
   }, [resetSignal]);
 
@@ -146,7 +137,9 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
             return {
               commit: String(d.sha ?? "").slice(0, 7),
               author: String(d.author ?? "unknown"),
-              message: String(d.message ?? diff.message ?? `Deploy to ${d.service ?? "service"}`),
+              message: String(
+                d.message ?? diff.message ?? `Deploy to ${d.service ?? "service"}`
+              ),
               diffStat: stats
                 ? `+${stats.additions ?? 0} -${stats.deletions ?? 0}`
                 : "+1 -1",
@@ -200,81 +193,22 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
     setIsGenerating(false);
   };
 
-  const handleApproval = async (approvalId: string, decision: "approved" | "rejected") => {
-    setTurns((prev) =>
-      prev.map((t) => {
-        if (t.approvalId === approvalId || (!t.approvalId && t.proposedAction)) {
-          return { ...t, approvalDecision: decision };
-        }
-        return t;
-      })
-    );
-
-    try {
-      const res = await fetch(`${API_BASE}/api/approvals/${approvalId}/decide`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ decision }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || `Approval failed (${res.status})`);
-      }
-      onApprovalDecision?.(approvalId, decision);
-      if (data.answer) {
-        setTurns((prev) => [
-          ...prev,
-          {
-            id: `asst_res_${Date.now()}`,
-            role: "assistant",
-            mode: "incident",
-            createdAt: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-            content: data.answer,
-            timeline: data.timeline,
-          },
-        ]);
-      }
-    } catch (err) {
-      // Revert optimistic update and surface the real error
-      setTurns((prev) => [
-        ...prev.map((t) =>
-          t.approvalId === approvalId ? { ...t, approvalDecision: "pending" as const } : t
-        ),
-        {
-          id: `asst_err_${Date.now()}`,
-          role: "assistant",
-          mode: "incident",
-          createdAt: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          content: `Could not record approval decision: ${
-            err instanceof Error ? err.message : "Request failed."
-          }`,
-        },
-      ]);
-    }
-  };
-
   const handleUserPromptSubmit = async (
     content: string,
     _attachments?: Array<{ name: string; size: number; type: string }>,
-    overrideMode?: Mode,
     overrideSeverity?: Severity
   ) => {
-    const activeMode = overrideMode ?? mode;
     const activeSeverity = overrideSeverity ?? severity;
 
     const userTurn: ChatTurn = {
       id: `usr_${Date.now()}`,
       role: "user",
-      mode: activeMode,
+      mode: "incident",
       content,
-      createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      createdAt: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
     };
 
     const nextWithUser = [...turns, userTurn];
@@ -282,11 +216,10 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
     setIsGenerating(true);
 
     try {
-      // Ensure a persistent conversation row exists in Postgres as soon as a conversation starts
       let activeConvId = conversationId;
       let activeThreadId = threadId;
       if (!activeConvId) {
-        const created = await createChat({ mode: activeMode });
+        const created = await createChat({ mode: "incident" });
         activeConvId = created.id;
         activeThreadId = created.threadId;
         setConversationId(created.id);
@@ -295,171 +228,67 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
           conversationId: created.id,
           threadId: created.threadId,
           turns: nextWithUser,
-          mode: activeMode,
+          mode: "incident",
           title: created.title,
         });
       }
 
-      if (activeMode === "ask") {
-        const res = await fetch(`${API_BASE}/api/ask`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            query: content,
-            conversationId: activeConvId,
-            threadId: activeThreadId || undefined,
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data?.error || `Request failed (${res.status})`);
-        }
-        const resolvedConvId = data.conversationId || activeConvId;
-        const resolvedThreadId = data.threadId || activeThreadId;
-        if (resolvedConvId) setConversationId(resolvedConvId);
-        if (resolvedThreadId) setThreadId(resolvedThreadId);
-        const liveTurn: ChatTurn = {
-          id: `asst_${Date.now()}`,
-          role: "assistant",
-          mode: "ask",
-          createdAt: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          content: data.answer || "Completed query.",
-          citations: data.citations || [],
-          confidence: data.confidence || "high",
-          grounded: data.grounded ?? true,
-          timeline: data.timeline || [],
-        };
-        const updatedTurns = [...nextWithUser, liveTurn];
-        setTurns(updatedTurns);
-        if (resolvedConvId) {
-          onConversationSync?.({
-            conversationId: resolvedConvId,
-            threadId: resolvedThreadId,
-            turns: updatedTurns,
-            mode: "ask",
-            title: data.title,
-          });
-        }
-        onSendMessage?.(liveTurn);
-      } else if (activeMode === "incident") {
-        const res = await fetch(`${API_BASE}/api/incidents`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            title: content.slice(0, 100),
-            severity: activeSeverity,
-            symptomSummary: content,
-            conversationId: activeConvId,
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data?.error || `Request failed (${res.status})`);
-        }
-        const resolvedConvId = data.conversationId || activeConvId;
-        const resolvedThreadId = data.threadId || activeThreadId;
-        if (resolvedConvId) setConversationId(resolvedConvId);
-        if (resolvedThreadId) setThreadId(resolvedThreadId);
-        const liveTurn: ChatTurn = {
-          id: `asst_${Date.now()}`,
-          role: "assistant",
-          mode: "incident",
-          createdAt: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          content: data.answer || "Incident investigation paused at approval gate.",
-          citations: data.citations || [],
-          confidence: data.confidence || "high",
-          grounded: true,
-          timeline: data.timeline || [],
-          hypotheses: data.hypotheses || [],
-          proposedAction: data.proposedAction || undefined,
-          approvalId: data.approvalId ?? data.incident?.id,
-          approvalDecision: data.proposedAction ? "pending" : undefined,
-        };
-        const updatedTurns = [...nextWithUser, liveTurn];
-        setTurns(updatedTurns);
-        if (resolvedConvId) {
-          onConversationSync?.({
-            conversationId: resolvedConvId,
-            threadId: resolvedThreadId,
-            turns: updatedTurns,
-            mode: "incident",
-            title: data.title,
-          });
-        }
-        onSendMessage?.(liveTurn);
-      } else if (activeMode === "postmortem") {
-        const listRes = await fetch(`${API_BASE}/api/incidents`, {
-          credentials: "include",
-        });
-        const listData = await listRes.json().catch(() => ({}));
-        if (!listRes.ok) {
-          throw new Error(listData?.error || `Failed to load incidents (${listRes.status})`);
-        }
-        const latestIncident = listData.incidents?.[0];
-        if (!latestIncident?.id) {
-          throw new Error("No incidents exist yet. Create or investigate an incident before drafting a postmortem.");
-        }
-        const pmRes = await fetch(
-          `${API_BASE}/api/incidents/${latestIncident.id}/postmortem`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({
-              conversationId: activeConvId,
-              query: content,
-            }),
-          }
-        );
-        const pmData = await pmRes.json().catch(() => ({}));
-        if (!pmRes.ok) {
-          throw new Error(pmData?.error || `Postmortem generation failed (${pmRes.status})`);
-        }
-        const resolvedConvId = pmData.conversationId || activeConvId;
-        const resolvedThreadId = pmData.threadId || activeThreadId;
-        if (resolvedConvId) setConversationId(resolvedConvId);
-        if (resolvedThreadId) setThreadId(resolvedThreadId);
-        const liveTurn: ChatTurn = {
-          id: `asst_${Date.now()}`,
-          role: "assistant",
-          mode: "postmortem",
-          createdAt: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          content: `Generated blameless postmortem for **${latestIncident.title}** (${latestIncident.severity}).`,
-          confidence: "high",
-          grounded: true,
-          timeline: pmData.timeline || [],
-          postmortemMarkdown: pmData.postmortemMarkdown,
-          actionItems: pmData.actionItems || [],
-        };
-        const updatedTurns = [...nextWithUser, liveTurn];
-        setTurns(updatedTurns);
-        if (resolvedConvId) {
-          onConversationSync?.({
-            conversationId: resolvedConvId,
-            threadId: resolvedThreadId,
-            turns: updatedTurns,
-            mode: "postmortem",
-            title: pmData.title,
-          });
-        }
-        onSendMessage?.(liveTurn);
+      const res = await fetch(`${API_BASE}/api/incidents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          title: content.slice(0, 100),
+          severity: activeSeverity,
+          symptomSummary: content,
+          conversationId: activeConvId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `Request failed (${res.status})`);
       }
+
+      const resolvedConvId = data.conversationId || activeConvId;
+      const resolvedThreadId = data.threadId || activeThreadId;
+      if (resolvedConvId) setConversationId(resolvedConvId);
+      if (resolvedThreadId) setThreadId(resolvedThreadId);
+
+      const liveTurn: ChatTurn = {
+        id: `asst_${Date.now()}`,
+        role: "assistant",
+        mode: "incident",
+        createdAt: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        content:
+          data.answer ||
+          "Evaluation completed. Review the ranked root causes and suggested fixes below.",
+        citations: data.citations || [],
+        confidence: data.confidence || "high",
+        grounded: true,
+        timeline: data.timeline || [],
+        hypotheses: data.hypotheses || [],
+        suggestedFixes: data.suggestedFixes || [],
+      };
+      const updatedTurns = [...nextWithUser, liveTurn];
+      setTurns(updatedTurns);
+      if (resolvedConvId) {
+        onConversationSync?.({
+          conversationId: resolvedConvId,
+          threadId: resolvedThreadId,
+          turns: updatedTurns,
+          mode: "incident",
+          title: data.title,
+        });
+      }
+      onSendMessage?.(liveTurn);
     } catch (err) {
       const errorTurn: ChatTurn = {
         id: `asst_err_${Date.now()}`,
         role: "assistant",
-        mode: activeMode,
+        mode: "incident",
         createdAt: new Date().toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
@@ -477,12 +306,6 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
   };
 
   const isEmpty = turns.length === 0;
-  const emptyHeading =
-    mode === "incident"
-      ? "What incident are we investigating?"
-      : mode === "postmortem"
-        ? "Ready to draft a postmortem?"
-        : "How can Vigil help today?";
 
   return (
     <div
@@ -491,14 +314,13 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
       } w-full overflow-hidden bg-[#17181b] text-[#ececef]`}
     >
       <div className="relative flex h-full min-w-0 flex-1 flex-col">
-        {/* Minimal Claude/ChatGPT-style Top Bar */}
         <header className="z-20 flex h-[54px] shrink-0 items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2 min-w-0">
             {sidebarToggle}
             <span className="text-[14.5px] font-medium tracking-[-0.01em] text-[#f2f2f4]">
               Vigil
             </span>
-            {!isEmpty && (
+            {!isEmpty && threadId && (
               <button
                 type="button"
                 onClick={handleCopyThreadId}
@@ -521,7 +343,7 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
                 type="button"
                 onClick={onOpenHistory}
                 className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-[#9b9da6] transition-colors hover:bg-white/[0.06] hover:text-[#f2f2f4]"
-                title="View chat history"
+                title="View evaluation history"
               >
                 <History className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="hidden sm:inline">History</span>
@@ -567,10 +389,10 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
                 type="button"
                 onClick={handleNewThread}
                 className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-[#9b9da6] transition-colors hover:bg-white/[0.06] hover:text-[#f2f2f4]"
-                title="New chat"
+                title="New evaluation"
               >
                 <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="hidden md:inline">New chat</span>
+                <span className="hidden md:inline">New evaluation</span>
               </button>
             )}
 
@@ -588,10 +410,9 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
 
         {loadingThread ? (
           <main className="flex flex-1 items-center justify-center">
-            <VigilLoader variant="section" label="Loading conversation…" />
+            <VigilLoader variant="section" label="Loading evaluation…" />
           </main>
         ) : isEmpty ? (
-          /* Centered Claude/ChatGPT Empty State */
           <main className="dash-scroll flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-16 sm:px-6">
             <div className="dash-fade w-full max-w-[740px]">
               <div className="mb-8 flex flex-col items-center text-center">
@@ -605,13 +426,11 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
                   />
                 </div>
                 <h1 className="text-[25px] font-medium tracking-[-0.025em] text-[#f2f2f4] sm:text-[30px]">
-                  {emptyHeading}
+                  What deployment failure are we evaluating?
                 </h1>
               </div>
 
               <PromptComposer
-                currentMode={mode}
-                onChangeMode={setMode}
                 severity={severity}
                 onChangeSeverity={setSeverity}
                 onSubmit={(content, files) => handleUserPromptSubmit(content, files)}
@@ -627,9 +446,8 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
                       key={p.label}
                       type="button"
                       onClick={() => {
-                        setMode(p.mode);
                         setSeverity(p.sev);
-                        handleUserPromptSubmit(p.query, undefined, p.mode, p.sev);
+                        handleUserPromptSubmit(p.query, undefined, p.sev);
                       }}
                       className="group flex cursor-pointer items-start gap-2.5 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3 text-left transition-all hover:border-white/[0.15] hover:bg-white/[0.05]"
                     >
@@ -652,7 +470,6 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
             </div>
           </main>
         ) : (
-          /* Active Conversation Stream + Bottom Composer */
           <>
             <main className="dash-scroll flex-1 overflow-y-auto px-4 pt-4 pb-8 sm:px-6">
               <div className="mx-auto w-full max-w-[740px] space-y-8">
@@ -691,20 +508,11 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
 
                         <MarkdownProse content={turn.content} />
 
-                        {(turn.hypotheses || turn.proposedAction) && (
+                        {((turn.hypotheses && turn.hypotheses.length > 0) ||
+                          (turn.suggestedFixes && turn.suggestedFixes.length > 0)) && (
                           <IncidentHypothesisPanel
                             hypotheses={turn.hypotheses}
-                            proposedAction={turn.proposedAction}
-                            approvalId={turn.approvalId}
-                            approvalDecision={turn.approvalDecision}
-                            onDecideApproval={handleApproval}
-                          />
-                        )}
-
-                        {turn.postmortemMarkdown && (
-                          <PostmortemArtifactCard
-                            postmortemMarkdown={turn.postmortemMarkdown}
-                            actionItems={turn.actionItems}
+                            suggestedFixes={turn.suggestedFixes}
                           />
                         )}
 
@@ -746,13 +554,7 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
                   <div className="dash-fade py-1">
                     <VigilLoader
                       variant="inline"
-                      label={
-                        mode === "incident"
-                          ? "Investigating telemetry & runbooks…"
-                          : mode === "postmortem"
-                            ? "Drafting postmortem…"
-                            : "Thinking…"
-                      }
+                      label="Evaluating deploys, live logs & runbooks…"
                     />
                   </div>
                 )}
@@ -763,8 +565,6 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
 
             <footer className="shrink-0 bg-gradient-to-t from-[#17181b] via-[#17181b] to-transparent px-4 pt-2 pb-4 sm:px-6">
               <PromptComposer
-                currentMode={mode}
-                onChangeMode={setMode}
                 severity={severity}
                 onChangeSeverity={setSeverity}
                 onSubmit={(content, files) => handleUserPromptSubmit(content, files)}
@@ -798,10 +598,10 @@ export const VigilCopilotChat: React.FC<VigilCopilotChatProps> = ({
               onServiceRegistered?.(service);
               return true;
             }
-            return false;
           } catch {
-            return false;
+            // handled by modal
           }
+          return false;
         }}
       />
     </div>

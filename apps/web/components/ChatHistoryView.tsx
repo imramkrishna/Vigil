@@ -3,10 +3,8 @@
 import React, { useMemo, useState } from "react";
 import {
   Check,
-  FileText,
   Flame,
   History,
-  MessageSquare,
   Pencil,
   Search,
   SquarePen,
@@ -14,7 +12,6 @@ import {
   X,
 } from "lucide-react";
 import type { ChatThread } from "@/lib/chatHistory";
-import type { Mode } from "@/types/vigil";
 
 interface ChatHistoryViewProps {
   threads: ChatThread[];
@@ -74,7 +71,6 @@ export function ChatHistoryView({
   onClearAll,
 }: ChatHistoryViewProps) {
   const [query, setQuery] = useState("");
-  const [modeFilter, setModeFilter] = useState<"all" | Mode>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
@@ -82,13 +78,12 @@ export function ChatHistoryView({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return threads.filter((t) => {
-      if (modeFilter !== "all" && t.mode !== modeFilter) return false;
       if (!q) return true;
       if (t.title.toLowerCase().includes(q)) return true;
       if (t.lastMessagePreview?.toLowerCase().includes(q)) return true;
       return t.turns.some((turn) => turn.content.toLowerCase().includes(q));
     });
-  }, [threads, query, modeFilter]);
+  }, [threads, query]);
 
   const grouped = useMemo(() => {
     const order: GroupLabel[] = [
@@ -124,19 +119,9 @@ export function ChatHistoryView({
     setDraftTitle("");
   };
 
-  const modeMeta = (mode: Mode) => {
-    if (mode === "incident") {
-      return { icon: Flame, label: "Incident", accent: "text-[#f7a08a]" };
-    }
-    if (mode === "postmortem") {
-      return { icon: FileText, label: "Postmortem", accent: "text-[#b8bac2]" };
-    }
-    return { icon: MessageSquare, label: "Ask", accent: "text-[#9b9da6]" };
-  };
-
   return (
     <div className="space-y-6">
-      {/* Search, Filters & Actions */}
+      {/* Search & Actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative min-w-[220px] flex-1 max-w-[380px]">
           <Search
@@ -146,37 +131,13 @@ export function ChatHistoryView({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search chat history…"
-            aria-label="Search chat history"
+            placeholder="Search evaluations…"
+            aria-label="Search evaluations"
             className="dash-input !pl-10"
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg bg-white/[0.04] p-0.5">
-            {(
-              [
-                { id: "all", label: "All" },
-                { id: "ask", label: "Ask" },
-                { id: "incident", label: "Incident" },
-                { id: "postmortem", label: "Postmortem" },
-              ] as const
-            ).map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setModeFilter(f.id)}
-                className={`cursor-pointer rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
-                  modeFilter === f.id
-                    ? "bg-white/[0.1] text-[#f2f2f4]"
-                    : "text-[#8e909a] hover:text-[#ececef]"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-
           {threads.length > 0 && (
             confirmClear ? (
               <div className="flex items-center gap-1.5">
@@ -215,7 +176,7 @@ export function ChatHistoryView({
             className="dash-btn-primary !py-1.5 !text-[12.5px]"
           >
             <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>New chat</span>
+            <span>New evaluation</span>
           </button>
         </div>
       </div>
@@ -227,10 +188,10 @@ export function ChatHistoryView({
             <History className="h-5 w-5" aria-hidden="true" />
           </div>
           <h2 className="text-[15.5px] font-medium text-[#f2f2f4]">
-            No conversations yet
+            No evaluations yet
           </h2>
           <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-[#8a8c95]">
-            Your chats, incident investigations, and postmortem drafts are saved here automatically so you can pick up right where you left off.
+            Your deployment failure evaluations and suggested fixes are saved here automatically so you can revisit them anytime.
           </p>
           <button
             type="button"
@@ -238,16 +199,16 @@ export function ChatHistoryView({
             className="dash-btn-primary mt-5"
           >
             <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Start a new chat</span>
+            <span>Start a new evaluation</span>
           </button>
         </div>
       ) : filtered.length === 0 ? (
         <div className="dash-card px-6 py-14 text-center">
           <p className="text-[14px] font-medium text-[#e2e3e8]">
-            No matching conversations
+            No matching evaluations
           </p>
           <p className="mt-1 text-[13px] text-[#8a8c95]">
-            Try a different search term or clear the mode filter.
+            Try a different search term.
           </p>
         </div>
       ) : (
@@ -260,8 +221,6 @@ export function ChatHistoryView({
 
               <div className="dash-card divide-y divide-white/[0.06] overflow-hidden">
                 {group.items.map((thread) => {
-                  const meta = modeMeta(thread.mode);
-                  const ModeIcon = meta.icon;
                   const lastTurn = thread.turns[thread.turns.length - 1];
                   const preview = lastTurn
                     ? stripMarkdownPreview(lastTurn.content)
@@ -278,8 +237,8 @@ export function ChatHistoryView({
                       }`}
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
-                        <ModeIcon
-                          className={`h-4 w-4 ${meta.accent}`}
+                        <Flame
+                          className="h-4 w-4 text-[#f7a08a]"
                           aria-hidden="true"
                         />
                       </div>
@@ -328,17 +287,6 @@ export function ChatHistoryView({
                             <span className="truncate text-[14px] font-medium text-[#f2f2f4]">
                               {thread.title}
                             </span>
-                            {thread.mode !== "ask" && (
-                              <span
-                                className={`shrink-0 rounded-md px-1.5 py-px text-[10.5px] font-medium ${
-                                  thread.mode === "incident"
-                                    ? "bg-[#e56b4e]/15 text-[#fba792]"
-                                    : "bg-white/[0.07] text-[#b8bac2]"
-                                }`}
-                              >
-                                {meta.label}
-                              </span>
-                            )}
                           </div>
                           {preview && (
                             <p className="mt-0.5 truncate text-[12.5px] text-[#848791]">

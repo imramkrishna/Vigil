@@ -4,10 +4,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { FileText, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import {
   deleteDoc,
-  getBudget,
   listDocs,
   uploadDocPdf,
-  type BudgetStatus,
   type DocumentRow,
 } from "@/lib/api";
 import { VigilLoader } from "./VigilLoader";
@@ -15,20 +13,17 @@ import { VigilLoader } from "./VigilLoader";
 export function DocsAdminAndOpsView() {
   const [docs, setDocs] = useState<DocumentRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const [query, setQuery] = useState("");
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(
+    null
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
-    const [liveDocs, liveBudget] = await Promise.all([
-      listDocs(),
-      getBudget().catch(() => null),
-    ]);
+    const liveDocs = await listDocs();
     setDocs(liveDocs);
-    if (liveBudget) setBudget(liveBudget);
   };
 
   const refresh = async () => {
@@ -47,11 +42,10 @@ export function DocsAdminAndOpsView() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([listDocs(), getBudget().catch(() => null)])
-      .then(([liveDocs, liveBudget]) => {
+    listDocs()
+      .then((liveDocs) => {
         if (!active) return;
         setDocs(liveDocs);
-        if (liveBudget) setBudget(liveBudget);
       })
       .catch((err) => {
         if (!active) return;
@@ -90,7 +84,7 @@ export function DocsAdminAndOpsView() {
       ]);
       setNotice({
         kind: "ok",
-        text: `Uploaded "${file.name}". Indexing chunks in the background.`,
+        text: `Uploaded "${file.name}". Chunking & embedding in the background.`,
       });
       setTimeout(refresh, 2500);
     } catch (err) {
@@ -121,59 +115,12 @@ export function DocsAdminAndOpsView() {
     }
   };
 
-  const spent = budget ? `$${budget.spentUsd.toFixed(2)}` : "$0.00";
-  const limit = budget ? `$${budget.limitUsd.toFixed(0)}` : "$250";
-  const pctNum = budget ? Math.min(100, Math.max(0, budget.percentUsed)) : 0;
-
   const filteredDocs = docs.filter((d) =>
     d.name.toLowerCase().includes(query.trim().toLowerCase())
   );
 
   return (
     <div className="space-y-6">
-      {/* Compact Unified Usage Strip */}
-      <div className="dash-card grid grid-cols-1 divide-y divide-white/[0.06] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        <div className="p-5">
-          <div className="text-[12px] text-[#8a8c95]">Monthly LLM spend</div>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="text-[22px] font-semibold tracking-[-0.02em] text-[#ececef] tabular-nums">
-              {spent}
-            </span>
-            <span className="text-[12.5px] text-[#7c7e87]">of {limit}</span>
-          </div>
-        </div>
-
-        <div className="p-5">
-          <div className="flex items-center justify-between text-[12px] text-[#8a8c95]">
-            <span>Budget utilization</span>
-            <span className="font-mono-only tabular-nums text-[#b5b7be]">
-              {pctNum.toFixed(1)}%
-            </span>
-          </div>
-          <div className="mt-3.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-            <div
-              className="h-full rounded-full bg-[#e56b4e] transition-all duration-300"
-              style={{ width: `${Math.max(pctNum, 2)}%` }}
-            />
-          </div>
-          <div className="mt-2 text-[11.5px] text-[#7c7e87]">
-            Organization monthly cap
-          </div>
-        </div>
-
-        <div className="p-5">
-          <div className="text-[12px] text-[#8a8c95]">Indexed runbooks</div>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="text-[22px] font-semibold tracking-[-0.02em] text-[#ececef] tabular-nums">
-              {docs.length}
-            </span>
-            <span className="text-[12.5px] text-[#7c7e87]">
-              Hybrid vector + FTS
-            </span>
-          </div>
-        </div>
-      </div>
-
       {notice && (
         <div
           role="status"
@@ -187,7 +134,7 @@ export function DocsAdminAndOpsView() {
         </div>
       )}
 
-      {/* Unified Runbook Library */}
+      {/* Runbook Library */}
       <div className="dash-card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4">
           <div className="relative flex-1 min-w-[200px] max-w-[320px]">
@@ -245,7 +192,7 @@ export function DocsAdminAndOpsView() {
               {docs.length === 0 ? "No runbooks uploaded yet" : "No matching runbooks"}
             </p>
             <p className="mt-1 text-[13px] text-[#7c7e87]">
-              Upload PDF runbooks or postmortems (up to 20 MB) for grounded retrieval.
+              Upload PDF runbooks or architecture docs (up to 20 MB) for RAG-grounded failure evaluations.
             </p>
           </div>
         ) : (

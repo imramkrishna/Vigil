@@ -1,4 +1,4 @@
-export type Mode = "ask" | "incident" | "postmortem";
+export type Mode = "incident";
 export type Severity = "SEV-1" | "SEV-2" | "SEV-3";
 export type Confidence = "high" | "medium" | "low";
 export type DeploymentPlatform =
@@ -58,19 +58,10 @@ export interface Hypothesis {
   evidence: string;
 }
 
-export interface ProposedAction {
-  kind: "create_ticket" | "post_status" | "schedule_followup";
+export interface SuggestedFix {
   title: string;
-  target: string;
-  payload: Record<string, unknown>;
-  rationale: string;
-  evidenceIds: string[];
-  idempotencyKey: string;
-}
-
-export interface ActionItem {
-  title: string;
-  owner: string;
+  description: string;
+  commandOrPatch?: string;
   priority: "P0" | "P1" | "P2";
 }
 
@@ -85,11 +76,7 @@ export interface ChatTurn {
   timeline?: string[]; // Agent tool-call trace steps
   citations?: Citation[];
   hypotheses?: Hypothesis[];
-  proposedAction?: ProposedAction | null;
-  approvalId?: string | null;
-  approvalDecision?: "pending" | "approved" | "rejected" | null;
-  postmortemMarkdown?: string;
-  actionItems?: ActionItem[];
+  suggestedFixes?: SuggestedFix[];
 }
 
 export interface ServiceRegistrationPayload {

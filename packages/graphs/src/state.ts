@@ -14,19 +14,10 @@ export const HypothesisSchema = z.object({
   evidence: z.string(),
 });
 
-export const ProposedActionSchema = z.object({
-  kind: z.enum(["create_ticket", "post_status", "schedule_followup"]),
+export const SuggestedFixSchema = z.object({
   title: z.string(),
-  target: z.string(),
-  payload: z.record(z.string(), z.unknown()),
-  rationale: z.string(),
-  evidenceIds: z.array(z.string()),
-  idempotencyKey: z.string(),
-});
-
-export const ActionItemSchema = z.object({
-  title: z.string(),
-  owner: z.string(),
+  description: z.string(),
+  commandOrPatch: z.string().optional(),
   priority: z.enum(["P0", "P1", "P2"]),
 });
 
@@ -43,7 +34,6 @@ export const RetrievedChunkSchema = z.object({
 export const OpsContextSchema = z.object({
   services: z.array(z.record(z.string(), z.unknown())).default([]),
   deploys: z.array(z.record(z.string(), z.unknown())).default([]),
-  pastIncidents: z.array(z.record(z.string(), z.unknown())).default([]),
   logs: z.array(z.record(z.string(), z.unknown())).default([]),
 });
 
@@ -51,7 +41,6 @@ export const VigilState = new StateSchema({
   // Request context
   orgId: z.string(),
   threadId: z.string(),
-  mode: z.enum(["ask", "incident", "postmortem"]).default("ask"),
   query: z.string().default(""),
   incidentId: z.string().optional(),
   severity: z.enum(["SEV-1", "SEV-2", "SEV-3"]).optional(),
@@ -59,11 +48,6 @@ export const VigilState = new StateSchema({
   // Tool-calling loop (agent <-> runTools)
   messages: MessagesValue,
   toolRounds: z.number().default(0),
-
-  // Routing hints (used to seed the agent)
-  intent: z.enum(["docs", "sql", "both"]).default("both"),
-  serviceHint: z.string().optional(),
-  searchQuery: z.string().default(""),
 
   // Accumulated evidence with Reducers
   retrievedChunks: new ReducedValue(
@@ -79,7 +63,6 @@ export const VigilState = new StateSchema({
   opsContext: OpsContextSchema.default(() => ({
     services: [],
     deploys: [],
-    pastIncidents: [],
     logs: [],
   })),
   timeline: new ReducedValue(
@@ -90,7 +73,7 @@ export const VigilState = new StateSchema({
     }
   ),
 
-  // Ask Copilot outputs
+  // Evaluation outputs
   answer: z.string().default(""),
   citations: new ReducedValue(
     z.array(CitationSchema).default(() => []),
@@ -100,19 +83,8 @@ export const VigilState = new StateSchema({
     }
   ),
   confidence: z.enum(["high", "medium", "low"]).default("medium"),
-  grounded: z.boolean().default(true),
-  attempts: z.number().default(0),
-
-  // Incident Investigation & HITL Approval outputs
   hypotheses: z.array(HypothesisSchema).default(() => []),
-  proposedAction: ProposedActionSchema.nullable().default(null),
-  approvalId: z.string().nullable().default(null),
-  approvalDecision: z.enum(["approved", "rejected"]).nullable().default(null),
-  executionResult: z.record(z.string(), z.unknown()).nullable().default(null),
-
-  // Postmortem outputs
-  postmortemMarkdown: z.string().default(""),
-  actionItems: z.array(ActionItemSchema).default(() => []),
+  suggestedFixes: z.array(SuggestedFixSchema).default(() => []),
 });
 
 export type OpsContext = z.infer<typeof OpsContextSchema>;
@@ -120,5 +92,5 @@ export type VigilStateType = typeof VigilState.State;
 export type VigilUpdateType = typeof VigilState.Update;
 export type Citation = z.infer<typeof CitationSchema>;
 export type Hypothesis = z.infer<typeof HypothesisSchema>;
-export type ActionItem = z.infer<typeof ActionItemSchema>;
+export type SuggestedFix = z.infer<typeof SuggestedFixSchema>;
 export type RetrievedChunk = z.infer<typeof RetrievedChunkSchema>;

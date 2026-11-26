@@ -26,7 +26,7 @@ export async function listChatsController(req: Request, res: Response) {
 // POST /api/chats — Start a new conversation row immediately and return its conversationId
 export async function createChatController(req: Request, res: Response) {
   try {
-    const { mode = "ask", title } = (req.body ?? {}) as {
+    const { mode = "incident", title } = (req.body ?? {}) as {
       mode?: ChatMode;
       title?: string;
     };

@@ -1,15 +1,14 @@
 import type {
-  ActionItem,
   Citation,
   DeploymentPlatform,
   Hypothesis,
   IntegrationAuthMethod,
   IntegrationProvider,
   OrgIntegrationRow,
-  ProposedAction,
   ServiceLogEntry,
   ServiceRegistrationPayload,
   Severity,
+  SuggestedFix,
 } from "../types/vigil";
 
 export const API_BASE =
@@ -36,36 +35,16 @@ export interface DocumentRow {
   indexedAt?: string | null;
 }
 
-export interface BudgetStatus {
-  orgId: string;
-  spentUsd: number;
-  limitUsd: number;
-  remainingUsd: number;
-  percentUsed: number;
-  exceeded: boolean;
-}
-
 export interface IncidentRow {
   id: string;
   orgId: string;
   threadId: string;
   title: string;
   severity: Severity;
-  status: "investigating" | "awaiting_approval" | "mitigating" | "resolved";
+  status: "investigating" | "monitoring" | "resolved";
   openedBy?: string | null;
   openedAt: string;
   resolvedAt?: string | null;
-}
-
-export interface ApprovalRow {
-  id: string;
-  incidentId: string;
-  orgId: string;
-  action: ProposedAction;
-  decision: "pending" | "approved" | "rejected";
-  decidedBy?: string | null;
-  decidedAt?: string | null;
-  createdAt: string;
 }
 
 export interface ConversationRow {
@@ -74,7 +53,7 @@ export interface ConversationRow {
   userId: string;
   threadId: string;
   title: string;
-  mode: "ask" | "incident" | "postmortem";
+  mode: "incident";
   incidentId?: string | null;
   messageCount: number;
   lastMessagePreview?: string | null;
@@ -87,7 +66,7 @@ export interface ConversationMessageRow {
   orgId: string;
   conversationId: string;
   role: "user" | "assistant";
-  mode: "ask" | "incident" | "postmortem";
+  mode: "incident";
   content: string;
   confidence?: "high" | "medium" | "low" | null;
   grounded?: boolean | null;
@@ -95,11 +74,7 @@ export interface ConversationMessageRow {
     timeline?: string[];
     citations?: Citation[];
     hypotheses?: Hypothesis[];
-    proposedAction?: ProposedAction | null;
-    approvalId?: string | null;
-    approvalDecision?: "pending" | "approved" | "rejected" | null;
-    postmortemMarkdown?: string;
-    actionItems?: ActionItem[];
+    suggestedFixes?: SuggestedFix[];
   } | null;
   createdAt: string;
 }
@@ -238,12 +213,7 @@ export async function deleteDoc(id: string) {
   });
 }
 
-// ─── Ops Services, Deploys & Budget ──────────────────────────────────
-
-export async function getBudget(): Promise<BudgetStatus> {
-  const res = await apiFetch<{ budget: BudgetStatus }>("/api/ops/budget");
-  return res.budget;
-}
+// ─── Ops Services & Deploys ──────────────────────────────────────────
 
 export async function listServices() {
   const res = await apiFetch<{ services: Record<string, unknown>[] }>(
@@ -364,11 +334,10 @@ export async function listDeploys(service?: string) {
       configDiff?: Record<string, unknown>;
       status: string;
     }>;
-    pastIncidents: Array<Record<string, unknown>>;
   }>(`/api/ops/deploys${q}`);
 }
 
-// ─── Incidents, Approvals & Postmortems ──────────────────────────────
+// ─── Incidents & Failure Evaluations ─────────────────────────────────
 
 export async function listIncidents(): Promise<IncidentRow[]> {
   const res = await apiFetch<{ incidents: IncidentRow[] }>("/api/incidents");
@@ -380,13 +349,15 @@ export async function createIncident(params: {
   severity?: Severity;
   service?: string;
   symptomSummary?: string;
+  conversationId?: string;
 }) {
   return apiFetch<{
     incident: IncidentRow;
+    conversationId: string;
+    title: string;
     threadId: string;
-    status: string;
     hypotheses: Hypothesis[];
-    proposedAction: ProposedAction | null;
+    suggestedFixes: SuggestedFix[];
     answer: string;
     citations: Citation[];
     confidence: "high" | "medium" | "low";
@@ -394,66 +365,6 @@ export async function createIncident(params: {
   }>("/api/incidents", {
     method: "POST",
     body: JSON.stringify(params),
-  });
-}
-
-export async function generatePostmortem(incidentId: string) {
-  return apiFetch<{
-    incidentId: string;
-    threadId: string;
-    postmortemMarkdown: string;
-    actionItems: ActionItem[];
-    timeline: string[];
-  }>(`/api/incidents/${incidentId}/postmortem`, {
-    method: "POST",
-  });
-}
-
-export async function listApprovals(
-  decision?: "pending" | "approved" | "rejected"
-): Promise<ApprovalRow[]> {
-  const q = decision ? `?decision=${decision}` : "";
-  const res = await apiFetch<{ approvals: ApprovalRow[] }>(
-    `/api/approvals${q}`
-  );
-  return res.approvals ?? [];
-}
-
-export async function decideApproval(
-  approvalId: string,
-  decision: "approved" | "rejected"
-) {
-  return apiFetch<{
-    approval: ApprovalRow;
-    incidentStatus: string;
-    answer: string;
-    timeline: string[];
-  }>(`/api/approvals/${approvalId}/decide`, {
-    method: "POST",
-    body: JSON.stringify({ decision }),
-  });
-}
-
-export async function askCopilot(
-  query: string,
-  opts?: { conversationId?: string; threadId?: string }
-) {
-  return apiFetch<{
-    conversationId: string;
-    title: string;
-    answer: string;
-    citations: Citation[];
-    confidence: "high" | "medium" | "low";
-    grounded: boolean;
-    timeline: string[];
-    threadId: string;
-  }>("/api/ask", {
-    method: "POST",
-    body: JSON.stringify({
-      query,
-      conversationId: opts?.conversationId,
-      threadId: opts?.threadId,
-    }),
   });
 }
 
@@ -465,7 +376,7 @@ export async function listChats(): Promise<ConversationRow[]> {
 }
 
 export async function createChat(params?: {
-  mode?: "ask" | "incident" | "postmortem";
+  mode?: "incident";
   title?: string;
 }): Promise<ConversationRow> {
   const res = await apiFetch<{ conversation: ConversationRow }>("/api/chats", {

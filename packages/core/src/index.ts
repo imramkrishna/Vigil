@@ -6,5 +6,4 @@ export * from "./chat";
 export * from "./security";
 export * from "./config/s3.config";
 export * from "./config/s3.services";
-export * from "./config/firecrawl";
 export * from "./config/octokit";

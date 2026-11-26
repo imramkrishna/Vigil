@@ -27,7 +27,7 @@ export async function createConversation(params: {
   title?: string;
   incidentId?: string | null;
 }) {
-  const mode = params.mode ?? "ask";
+  const mode = params.mode ?? "incident";
   const threadId =
     params.threadId?.trim() || `${mode}-${crypto.randomUUID()}`;
 
@@ -38,7 +38,7 @@ export async function createConversation(params: {
         orgId: params.orgId,
         userId: params.userId,
         threadId,
-        title: params.title?.trim() || "New chat",
+        title: params.title?.trim() || "New evaluation",
         mode,
         incidentId: params.incidentId ?? null,
       })
@@ -99,7 +99,7 @@ export async function getOrCreateConversation(params: {
       if (byThread) return byThread;
     }
 
-    const mode = params.mode ?? "ask";
+    const mode = params.mode ?? "incident";
     const threadId =
       params.threadId?.trim() || `${mode}-${crypto.randomUUID()}`;
 
@@ -109,7 +109,7 @@ export async function getOrCreateConversation(params: {
         orgId: params.orgId,
         userId: params.userId,
         threadId,
-        title: "New chat",
+        title: "New evaluation",
         mode,
         incidentId: params.incidentId ?? null,
       })
@@ -237,26 +237,6 @@ export async function updateConversationTitle(params: {
       .returning();
 
     return updated ?? null;
-  });
-}
-
-export async function updateMessageApprovalDecision(params: {
-  orgId: string;
-  approvalId: string;
-  decision: "approved" | "rejected";
-}) {
-  return withOrgContext(params.orgId, async (tx) => {
-    await tx
-      .update(conversationMessages)
-      .set({
-        metadata: sql`jsonb_set(coalesce(${conversationMessages.metadata}, '{}'::jsonb), '{approvalDecision}', to_jsonb(${params.decision}::text), true)`,
-      })
-      .where(
-        and(
-          eq(conversationMessages.orgId, params.orgId),
-          sql`${conversationMessages.metadata}->>'approvalId' = ${params.approvalId}`
-        )
-      );
   });
 }
 

@@ -8,7 +8,6 @@ interface AskCopilotViewProps {
   initialConversationId?: string | null;
   initialThreadId?: string;
   initialTurns?: ChatTurn[];
-  initialMode?: Mode;
   loadingThread?: boolean;
   resetSignal?: number;
   sidebarToggle?: React.ReactNode;
@@ -22,14 +21,12 @@ interface AskCopilotViewProps {
     mode: Mode;
     title?: string;
   }) => void;
-  onApprovalDecision?: (approvalId: string, decision: "approved" | "rejected") => void;
 }
 
 export function AskCopilotView({
   initialConversationId,
   initialThreadId,
   initialTurns,
-  initialMode,
   loadingThread,
   resetSignal,
   sidebarToggle,
@@ -37,7 +34,6 @@ export function AskCopilotView({
   onOpenHistory,
   onNewChat,
   onConversationSync,
-  onApprovalDecision,
 }: AskCopilotViewProps = {}) {
   return (
     <VigilCopilotChat
@@ -45,7 +41,6 @@ export function AskCopilotView({
       initialConversationId={initialConversationId}
       initialThreadId={initialThreadId}
       initialTurns={initialTurns}
-      initialMode={initialMode}
       loadingThread={loadingThread}
       resetSignal={resetSignal}
       sidebarToggle={sidebarToggle}
@@ -53,7 +48,6 @@ export function AskCopilotView({
       onOpenHistory={onOpenHistory}
       onNewChat={onNewChat}
       onConversationSync={onConversationSync}
-      onApprovalDecision={onApprovalDecision}
     />
   );
 }

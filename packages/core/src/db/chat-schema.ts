@@ -9,9 +9,9 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
-import { incidents, orgs, type ProposedAction } from "./schema";
+import { incidents, orgs } from "./schema";
 
-export const CHAT_MODES = ["ask", "incident", "postmortem"] as const;
+export const CHAT_MODES = ["incident"] as const;
 export type ChatMode = (typeof CHAT_MODES)[number];
 
 export const CHAT_ROLES = ["user", "assistant"] as const;
@@ -33,9 +33,10 @@ export interface ChatHypothesis {
   evidence: string;
 }
 
-export interface ChatActionItem {
+export interface ChatSuggestedFix {
   title: string;
-  owner: string;
+  description: string;
+  commandOrPatch?: string;
   priority: "P0" | "P1" | "P2";
 }
 
@@ -43,11 +44,7 @@ export interface ChatMessageMetadata {
   timeline?: string[];
   citations?: ChatCitation[];
   hypotheses?: ChatHypothesis[];
-  proposedAction?: ProposedAction | null;
-  approvalId?: string | null;
-  approvalDecision?: "pending" | "approved" | "rejected" | null;
-  postmortemMarkdown?: string;
-  actionItems?: ChatActionItem[];
+  suggestedFixes?: ChatSuggestedFix[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -66,8 +63,8 @@ export const conversations = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     /** Links 1:1 with LangGraph PostgresSaver checkpoint thread */
     threadId: text("thread_id").notNull().unique(),
-    title: text("title").notNull().default("New chat"),
-    mode: text("mode", { enum: CHAT_MODES }).notNull().default("ask"),
+    title: text("title").notNull().default("New evaluation"),
+    mode: text("mode", { enum: CHAT_MODES }).notNull().default("incident"),
     incidentId: uuid("incident_id").references(() => incidents.id, {
       onDelete: "set null",
     }),
@@ -101,7 +98,7 @@ export const conversationMessages = pgTable(
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
     role: text("role", { enum: CHAT_ROLES }).notNull(),
-    mode: text("mode", { enum: CHAT_MODES }).notNull().default("ask"),
+    mode: text("mode", { enum: CHAT_MODES }).notNull().default("incident"),
     content: text("content").notNull(),
     confidence: text("confidence", { enum: CHAT_CONFIDENCES }),
     grounded: boolean("grounded"),

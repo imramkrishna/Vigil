@@ -1,33 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, Check, Plus } from "lucide-react";
+import { Check, Plus, Wrench } from "lucide-react";
 import { listIncidents, type IncidentRow } from "@/lib/api";
 import { VigilLoader } from "./VigilLoader";
-import type { Hypothesis } from "../types/vigil";
+import type { Hypothesis, SuggestedFix } from "../types/vigil";
 
 const STEPS = [
-  { label: "Triage", key: "investigating" },
-  { label: "Investigate", key: "investigating" },
-  { label: "Rank causes", key: "investigating" },
-  { label: "Approval", key: "awaiting_approval" },
+  { label: "Detected", key: "investigating" },
+  { label: "Evaluating", key: "investigating" },
+  { label: "Monitoring", key: "monitoring" },
   { label: "Resolved", key: "resolved" },
 ];
 
 export interface LiveIncidentData {
   incident: IncidentRow;
   hypotheses?: Hypothesis[];
+  suggestedFixes?: SuggestedFix[];
   timeline?: string[];
   answer?: string;
 }
 
 export function IncidentRoomView({
-  onNavigateApproval,
-  onNavigatePostmortem,
   latestCreated,
 }: {
-  onNavigateApproval?: () => void;
-  onNavigatePostmortem?: () => void;
   latestCreated?: LiveIncidentData | null;
 }) {
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
@@ -141,10 +137,10 @@ export function IncidentRoomView({
     return (
       <div className="dash-card py-14 text-center">
         <p className="text-[14px] font-medium text-[#d8dae0]">
-          No incidents declared yet
+          No failure evaluations yet
         </p>
         <p className="mt-1 text-[13px] text-[#7c7e87]">
-          Click &ldquo;New incident&rdquo; above or switch Ask Vigil to Incident mode to start an investigation.
+          Click &ldquo;New evaluation&rdquo; above or start an evaluation from the main view.
         </p>
       </div>
     );
@@ -207,44 +203,20 @@ export function IncidentRoomView({
               {title}
             </h2>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {onNavigatePostmortem && (
-              <button
-                type="button"
-                onClick={onNavigatePostmortem}
-                className="dash-btn-ghost"
-              >
-                Postmortem
-              </button>
-            )}
-            {onNavigateApproval && (
-              <button
-                type="button"
-                onClick={onNavigateApproval}
-                className="dash-btn-primary"
-              >
-                <span>Review approvals</span>
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Clean Step Progress Bar */}
-        <ol className="mt-6 grid grid-cols-2 gap-3 border-t border-white/[0.06] pt-5 sm:grid-cols-5">
+        <ol className="mt-6 grid grid-cols-2 gap-3 border-t border-white/[0.06] pt-5 sm:grid-cols-4">
           {STEPS.map((s, idx) => {
             const isResolved = status === "resolved";
-            const isMonitoring = status === "monitoring" || status === "mitigating";
+            const isMonitoring = status === "monitoring";
             const isActive =
-              (status === "awaiting_approval" && idx === 3) ||
               (status === "investigating" && idx === 1) ||
-              (isMonitoring && idx === 3) ||
-              (isResolved && idx === 4);
+              (isMonitoring && idx === 2) ||
+              (isResolved && idx === 3);
             const isDone =
               isResolved ||
-              (status === "awaiting_approval" && idx < 3) ||
-              (isMonitoring && idx < 4) ||
+              (isMonitoring && idx < 2) ||
               (status === "investigating" && idx < 1);
 
             return (
@@ -296,7 +268,7 @@ export function IncidentRoomView({
 
             {liveHypotheses.length === 0 ? (
               <div className="p-5 text-[13px] text-[#8a8c95]">
-                No ranked hypotheses attached to this incident view yet. Check Approvals or Ask Vigil for investigation details.
+                No ranked hypotheses attached to this view yet. Open this evaluation from History to view full details.
               </div>
             ) : (
               <div className="divide-y divide-white/[0.05]">
@@ -334,10 +306,50 @@ export function IncidentRoomView({
             )}
           </div>
 
+          {isLatestSelected &&
+            latestCreated?.suggestedFixes &&
+            latestCreated.suggestedFixes.length > 0 && (
+              <div className="dash-card overflow-hidden">
+                <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
+                  <div className="flex items-center gap-2">
+                    <Wrench className="h-3.5 w-3.5 text-[#e56b4e]" aria-hidden="true" />
+                    <h3 className="text-[13px] font-medium text-[#ececef]">
+                      Suggested fixes
+                    </h3>
+                  </div>
+                  <span className="text-[12px] text-[#7c7e87]">
+                    {latestCreated.suggestedFixes.length}
+                  </span>
+                </div>
+                <div className="divide-y divide-white/[0.05]">
+                  {latestCreated.suggestedFixes.map((fix, i) => (
+                    <div key={i} className="p-5 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-[14px] font-medium text-[#ececef]">
+                          {fix.title}
+                        </p>
+                        <span className="font-mono-only shrink-0 rounded bg-white/[0.07] px-2 py-0.5 text-[11px] text-[#c9cbd3]">
+                          {fix.priority}
+                        </span>
+                      </div>
+                      <p className="text-[12.5px] leading-relaxed text-[#8a8c95]">
+                        {fix.description}
+                      </p>
+                      {fix.commandOrPatch && (
+                        <pre className="dash-scroll overflow-x-auto rounded-lg border border-white/[0.06] bg-[#111216] p-3 font-mono-only text-[11.5px] text-[#d4d6dc]">
+                          {fix.commandOrPatch}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           {isLatestSelected && latestCreated?.answer && (
             <div className="dash-card p-5">
               <div className="text-[12px] font-medium text-[#8a8c95]">
-                Investigation summary
+                Evaluation summary
               </div>
               <p className="mt-1.5 whitespace-pre-wrap text-[13.5px] leading-relaxed text-[#d8dae0]">
                 {latestCreated.answer}

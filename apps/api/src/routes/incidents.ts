@@ -1,7 +1,6 @@
 import { Router } from "express";
 import {
   createIncidentController,
-  generatePostmortemController,
   getIncidentByIdController,
   listIncidentsController,
 } from "../controllers";
@@ -16,10 +15,4 @@ incidentsRouter.post(
   requireAuth,
   requireRole("admin", "lead", "responder"),
   createIncidentController
-);
-incidentsRouter.post(
-  "/:id/postmortem",
-  requireAuth,
-  requireRole("admin", "lead", "responder"),
-  generatePostmortemController
 );

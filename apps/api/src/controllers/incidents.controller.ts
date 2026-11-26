@@ -6,14 +6,14 @@ import {
   generateAndUpdateChatTitle,
   getIncidentById,
   getOrCreateConversation,
-  listApprovalsForIncident,
   listIncidents,
   SEVERITIES,
+  updateIncidentStatus,
   type Severity,
 } from "@vigil/core";
 import { getVigilGraph } from "@vigil/graphs";
 
-// GET /api/incidents — List all incidents for the active organization
+// GET /api/incidents — List all incidents / failure evaluations for the active organization
 export async function listIncidentsController(req: Request, res: Response) {
   try {
     const { orgId } = req.auth!;
@@ -26,23 +26,19 @@ export async function listIncidentsController(req: Request, res: Response) {
   }
 }
 
-// GET /api/incidents/:id — Get a single incident with its approvals
+// GET /api/incidents/:id — Get a single incident
 export async function getIncidentByIdController(req: Request, res: Response) {
   try {
     const { orgId } = req.auth!;
     const incidentId = String(req.params.id ?? "");
 
-    const [incident, approvals] = await Promise.all([
-      getIncidentById(orgId, incidentId),
-      listApprovalsForIncident(orgId, incidentId),
-    ]);
-
+    const incident = await getIncidentById(orgId, incidentId);
     if (!incident) {
       res.status(404).json({ error: "Incident not found." });
       return;
     }
 
-    res.json({ incident, approvals });
+    res.json({ incident });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch incident";
@@ -50,7 +46,7 @@ export async function getIncidentByIdController(req: Request, res: Response) {
   }
 }
 
-// POST /api/incidents — Create incident, link/persist conversation, and run Incident Investigation graph
+// POST /api/incidents — Create incident, link/persist conversation, and run Failure Evaluation graph
 export async function createIncidentController(req: Request, res: Response) {
   try {
     const {
@@ -113,7 +109,6 @@ export async function createIncidentController(req: Request, res: Response) {
       {
         orgId,
         threadId,
-        mode: "incident",
         incidentId: incident.id,
         severity,
         query: cleanPrompt,
@@ -123,17 +118,12 @@ export async function createIncidentController(req: Request, res: Response) {
       }
     );
 
-    const [updatedIncident, incidentApprovals] = await Promise.all([
-      getIncidentById(orgId, incident.id),
-      listApprovalsForIncident(orgId, incident.id),
-    ]);
+    await updateIncidentStatus(orgId, incident.id, "monitoring");
+    const updatedIncident = await getIncidentById(orgId, incident.id);
 
-    const pendingApproval = incidentApprovals.find(
-      (a) => a.decision === "pending"
-    );
-    const approvalId = pendingApproval?.id ?? null;
     const answer =
-      state.answer || "Incident investigation paused at approval gate.";
+      state.answer ||
+      "Evaluation completed. Review the ranked root-cause hypotheses and suggested fixes below.";
 
     await appendConversationMessage({
       orgId,
@@ -147,14 +137,16 @@ export async function createIncidentController(req: Request, res: Response) {
         citations: state.citations,
         timeline: state.timeline,
         hypotheses: state.hypotheses,
-        proposedAction: state.proposedAction,
-        approvalId,
-        approvalDecision: state.proposedAction ? "pending" : null,
+        suggestedFixes: state.suggestedFixes,
       },
     });
 
     let chatTitle = conversation.title;
-    if (!chatTitle || chatTitle === "New chat") {
+    if (
+      !chatTitle ||
+      chatTitle === "New chat" ||
+      chatTitle === "New evaluation"
+    ) {
       chatTitle = await generateAndUpdateChatTitle({
         orgId,
         conversationId: conversation.id,
@@ -169,10 +161,9 @@ export async function createIncidentController(req: Request, res: Response) {
       incident: updatedIncident ?? incident,
       conversationId: conversation.id,
       title: chatTitle,
-      approvalId,
       threadId,
       hypotheses: state.hypotheses,
-      proposedAction: state.proposedAction,
+      suggestedFixes: state.suggestedFixes,
       answer,
       citations: state.citations,
       confidence: state.confidence,
@@ -182,109 +173,7 @@ export async function createIncidentController(req: Request, res: Response) {
     const message =
       error instanceof Error
         ? error.message
-        : "Failed to start incident investigation";
-    res.status(500).json({ error: message });
-  }
-}
-
-// POST /api/incidents/:id/postmortem — Generate postmortem Markdown & action items
-export async function generatePostmortemController(
-  req: Request,
-  res: Response
-) {
-  try {
-    const { orgId, userId } = req.auth!;
-    const incidentId = String(req.params.id ?? "");
-    const { conversationId: incomingConversationId, query } = (req.body ??
-      {}) as {
-      conversationId?: string;
-      query?: string;
-    };
-
-    const incident = await getIncidentById(orgId, incidentId);
-    if (!incident) {
-      res.status(404).json({ error: "Incident not found." });
-      return;
-    }
-
-    const graph = await getVigilGraph();
-    const state = await graph.invoke(
-      {
-        orgId,
-        threadId: incident.threadId,
-        mode: "postmortem",
-        incidentId: incident.id,
-        query: incident.title,
-      },
-      {
-        configurable: { thread_id: incident.threadId },
-      }
-    );
-
-    let conversationId: string | null = null;
-    let chatTitle: string | null = null;
-
-    if (incomingConversationId || query) {
-      const conversation = await getOrCreateConversation({
-        orgId,
-        userId,
-        conversationId: incomingConversationId,
-        mode: "postmortem",
-        incidentId: incident.id,
-      });
-      conversationId = conversation.id;
-
-      if (query?.trim()) {
-        await appendConversationMessage({
-          orgId,
-          conversationId: conversation.id,
-          role: "user",
-          mode: "postmortem",
-          content: query.trim(),
-        });
-      }
-
-      const summaryText = `Generated blameless postmortem for **${incident.title}** (${incident.severity}).`;
-      await appendConversationMessage({
-        orgId,
-        conversationId: conversation.id,
-        role: "assistant",
-        mode: "postmortem",
-        content: summaryText,
-        confidence: "high",
-        grounded: true,
-        metadata: {
-          timeline: state.timeline,
-          postmortemMarkdown: state.postmortemMarkdown,
-          actionItems: state.actionItems,
-        },
-      });
-
-      chatTitle = conversation.title;
-      if (!chatTitle || chatTitle === "New chat") {
-        chatTitle = await generateAndUpdateChatTitle({
-          orgId,
-          conversationId: conversation.id,
-          threadId: conversation.threadId,
-          userMessage: query?.trim() || `Postmortem: ${incident.title}`,
-          assistantResponse: summaryText,
-          mode: "postmortem",
-        });
-      }
-    }
-
-    res.json({
-      incidentId: incident.id,
-      conversationId,
-      title: chatTitle,
-      threadId: incident.threadId,
-      postmortemMarkdown: state.postmortemMarkdown,
-      actionItems: state.actionItems,
-      timeline: state.timeline,
-    });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to generate postmortem";
+        : "Failed to run failure evaluation";
     res.status(500).json({ error: message });
   }
 }

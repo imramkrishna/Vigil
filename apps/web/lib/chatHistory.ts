@@ -46,7 +46,7 @@ export function mapMessageToTurn(msg: ConversationMessageRow): ChatTurn {
   return {
     id: msg.id,
     role: msg.role,
-    mode: msg.mode,
+    mode: "incident",
     content: msg.content,
     createdAt: new Date(msg.createdAt).toLocaleTimeString([], {
       hour: "2-digit",
@@ -57,11 +57,7 @@ export function mapMessageToTurn(msg: ConversationMessageRow): ChatTurn {
     timeline: meta.timeline,
     citations: meta.citations,
     hypotheses: meta.hypotheses,
-    proposedAction: meta.proposedAction,
-    approvalId: meta.approvalId,
-    approvalDecision: meta.approvalDecision,
-    postmortemMarkdown: meta.postmortemMarkdown,
-    actionItems: meta.actionItems,
+    suggestedFixes: meta.suggestedFixes,
   };
 }
 
@@ -72,8 +68,8 @@ function mapConversationRow(
   return {
     id: row.id,
     threadId: row.threadId,
-    title: row.title || "New chat",
-    mode: row.mode,
+    title: row.title || "New evaluation",
+    mode: "incident",
     turns: existing?.turns ?? [],
     messageCount: row.messageCount ?? existing?.turns.length ?? 0,
     lastMessagePreview: row.lastMessagePreview ?? existing?.lastMessagePreview,
@@ -105,8 +101,8 @@ export async function loadChatThreadMessages(
   const loaded: ChatThread = {
     id: conversation.id,
     threadId: conversation.threadId,
-    title: conversation.title || "New chat",
-    mode: conversation.mode,
+    title: conversation.title || "New evaluation",
+    mode: "incident",
     turns,
     messageCount: Math.max(conversation.messageCount, turns.length),
     lastMessagePreview: conversation.lastMessagePreview,

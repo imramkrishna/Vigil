@@ -7,8 +7,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   BookOpen,
-  CheckCircle2,
-  FileText,
   History,
   LogOut,
   Menu,
@@ -27,15 +25,12 @@ import {
 } from "@/components/IncidentRoomView";
 import { AskCopilotView } from "@/components/AskCopilotView";
 import { ChatHistoryView } from "@/components/ChatHistoryView";
-import { ApprovalsInboxView } from "@/components/ApprovalsInboxView";
-import { PostmortemEditorView } from "@/components/PostmortemEditorView";
 import { DocsAdminAndOpsView } from "@/components/DocsAdminAndOpsView";
 import { SettingsView } from "@/components/SettingsView";
 import { VigilLoader } from "@/components/VigilLoader";
 import {
   createIncident,
   getMe,
-  listApprovals,
   signOut,
   type AuthUser,
 } from "@/lib/api";
@@ -52,14 +47,7 @@ import {
 } from "@/lib/chatHistory";
 import type { ChatTurn, Mode, Severity } from "@/types/vigil";
 
-type TabId =
-  | "ask"
-  | "history"
-  | "incident"
-  | "approvals"
-  | "postmortem"
-  | "ops"
-  | "settings";
+type TabId = "ask" | "history" | "incident" | "ops" | "settings";
 
 interface NavItem {
   id: TabId;
@@ -72,60 +60,34 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   {
     id: "history",
-    label: "Chat history",
-    title: "Chat history",
+    label: "History",
+    title: "Evaluation history",
     icon: History,
   },
   {
     id: "incident",
-    label: "Incidents",
-    title: "Incidents",
+    label: "Evaluations",
+    title: "Failure evaluations",
     icon: AlertCircle,
     dot: true,
   },
   {
-    id: "approvals",
-    label: "Approvals",
-    title: "Approvals",
-    icon: CheckCircle2,
-  },
-  {
-    id: "postmortem",
-    label: "Postmortems",
-    title: "Postmortems",
-    icon: FileText,
-  },
-  {
     id: "ops",
     label: "Runbooks",
-    title: "Runbooks & usage",
+    title: "Runbooks",
     icon: BookOpen,
   },
 ];
 
-const ALL_TABS: TabId[] = [
-  "ask",
-  "history",
-  "incident",
-  "approvals",
-  "postmortem",
-  "ops",
-  "settings",
-];
+const ALL_TABS: TabId[] = ["ask", "history", "incident", "ops", "settings"];
 
 const VIEW_TITLES: Record<TabId, string> = {
   ask: "Vigil",
-  history: "Chat history",
-  incident: "Incidents",
-  approvals: "Approvals",
-  postmortem: "Postmortems",
-  ops: "Runbooks & usage",
+  history: "Evaluation history",
+  incident: "Failure evaluations",
+  ops: "Runbooks",
   settings: "Settings",
 };
-
-function makeThreadId() {
-  return `vigil_thr_${Math.random().toString(36).substring(2, 9)}`;
-}
 
 function DashboardContent() {
   const router = useRouter();
@@ -153,7 +115,6 @@ function DashboardContent() {
   );
   const [activeChatId, setActiveChatId] = useState<string>("");
   const [activeInitialTurns, setActiveInitialTurns] = useState<ChatTurn[]>([]);
-  const [activeInitialMode, setActiveInitialMode] = useState<Mode>("ask");
   const [loadingThread, setLoadingThread] = useState(false);
   const [chatInstanceKey, setChatInstanceKey] = useState(0);
 
@@ -163,16 +124,9 @@ function DashboardContent() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
-  const [pendingCount, setPendingCount] = useState<number>(0);
   const [latestIncident, setLatestIncident] = useState<LiveIncidentData | null>(
     null
   );
-
-  const refreshPendingApprovals = useCallback(() => {
-    listApprovals("pending")
-      .then((rows) => setPendingCount(rows.length))
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -184,18 +138,12 @@ function DashboardContent() {
       }
       setUser(u);
       setAuthChecked(true);
-      refreshPendingApprovals();
       loadChatThreads();
     });
     return () => {
       active = false;
     };
-  }, [router, refreshPendingApprovals]);
-
-  useEffect(() => {
-    if (!authChecked) return;
-    refreshPendingApprovals();
-  }, [tab, authChecked, refreshPendingApprovals]);
+  }, [router]);
 
   useEffect(() => {
     if (!showNew) return;
@@ -236,7 +184,6 @@ function DashboardContent() {
     setActiveConversationId(null);
     setActiveChatId("");
     setActiveInitialTurns([]);
-    setActiveInitialMode("ask");
     setLoadingThread(false);
     setChatInstanceKey((k) => k + 1);
     setTab("ask");
@@ -246,7 +193,6 @@ function DashboardContent() {
   const handleSelectThread = useCallback(async (thread: ChatThread) => {
     setActiveConversationId(thread.id);
     setActiveChatId(thread.threadId);
-    setActiveInitialMode(thread.mode);
     setTab("ask");
     setMobileMenuOpen(false);
 
@@ -265,7 +211,6 @@ function DashboardContent() {
       if (loaded) {
         setActiveInitialTurns(loaded.turns);
         setActiveChatId(loaded.threadId);
-        setActiveInitialMode(loaded.mode);
         setChatInstanceKey((k) => k + 1);
       }
     } finally {
@@ -284,7 +229,6 @@ function DashboardContent() {
         setActiveConversationId(null);
         setActiveChatId("");
         setActiveInitialTurns([]);
-        setActiveInitialMode("ask");
         setChatInstanceKey((k) => k + 1);
       }
     },
@@ -296,7 +240,6 @@ function DashboardContent() {
     setActiveConversationId(null);
     setActiveChatId("");
     setActiveInitialTurns([]);
-    setActiveInitialMode("ask");
     setChatInstanceKey((k) => k + 1);
   }, []);
 
@@ -315,17 +258,17 @@ function DashboardContent() {
       setLatestIncident({
         incident: res.incident,
         hypotheses: res.hypotheses,
+        suggestedFixes: res.suggestedFixes,
         timeline: res.timeline,
         answer: res.answer,
       });
-      refreshPendingApprovals();
       setShowNew(false);
       setTab("incident");
-      setBanner(`Investigating "${cleanTitle}" (${severity}).`);
+      setBanner(`Evaluated "${cleanTitle}" (${severity}).`);
       setTitle("");
     } catch (err) {
       setCreateError(
-        err instanceof Error ? err.message : "Failed to create incident."
+        err instanceof Error ? err.message : "Failed to run failure evaluation."
       );
     } finally {
       setCreating(false);
@@ -412,7 +355,7 @@ function DashboardContent() {
         )}
       </div>
 
-      {/* Primary Action: New Chat */}
+      {/* Primary Action: New Evaluation */}
       <div className="px-2.5 pt-1 pb-2.5">
         <button
           type="button"
@@ -420,11 +363,11 @@ function DashboardContent() {
           className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[13.5px] font-medium text-[#ececef] transition-colors hover:border-white/[0.13] hover:bg-white/[0.06]"
         >
           <SquarePen className="h-4 w-4 shrink-0 text-[#e56b4e]" aria-hidden="true" />
-          <span>New chat</span>
+          <span>New evaluation</span>
         </button>
       </div>
 
-      {/* Navigation + Persistent Recent Chats */}
+      {/* Navigation + Persistent Recent Evaluations */}
       <nav
         aria-label="Dashboard navigation"
         className="dash-scroll flex-1 overflow-y-auto px-2.5 space-y-0.5"
@@ -432,12 +375,7 @@ function DashboardContent() {
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = tab === item.id;
-          const badgeCount =
-            item.id === "approvals"
-              ? pendingCount
-              : item.id === "history"
-                ? threads.length
-                : 0;
+          const badgeCount = item.id === "history" ? threads.length : 0;
 
           return (
             <button
@@ -461,13 +399,7 @@ function DashboardContent() {
               />
               <span className="flex-1 truncate">{item.label}</span>
               {badgeCount > 0 && (
-                <span
-                  className={`rounded-full px-1.5 py-px font-mono-only text-[11px] font-medium tabular-nums ${
-                    item.id === "approvals"
-                      ? "bg-[#e56b4e]/15 text-[#fba792]"
-                      : "bg-white/[0.07] text-[#9b9da6]"
-                  }`}
-                >
+                <span className="rounded-full bg-white/[0.07] px-1.5 py-px font-mono-only text-[11px] font-medium tabular-nums text-[#9b9da6]">
                   {badgeCount}
                 </span>
               )}
@@ -658,14 +590,12 @@ function DashboardContent() {
             initialConversationId={activeConversationId}
             initialThreadId={activeChatId}
             initialTurns={activeInitialTurns}
-            initialMode={activeInitialMode}
             loadingThread={loadingThread}
             sidebarToggle={sidebarToggleButton}
             historyCount={threads.length}
             onOpenHistory={() => handleSelectTab("history")}
             onNewChat={handleNewChat}
             onConversationSync={handleConversationSync}
-            onApprovalDecision={() => refreshPendingApprovals()}
           />
         </div>
 
@@ -719,19 +649,8 @@ function DashboardContent() {
                   />
                 )}
                 {tab === "incident" && (
-                  <IncidentRoomView
-                    latestCreated={latestIncident}
-                    onNavigateApproval={() => setTab("approvals")}
-                    onNavigatePostmortem={() => setTab("postmortem")}
-                  />
+                  <IncidentRoomView latestCreated={latestIncident} />
                 )}
-                {tab === "approvals" && (
-                  <ApprovalsInboxView
-                    currentRole={user?.role ?? "lead"}
-                    onDecisionComplete={refreshPendingApprovals}
-                  />
-                )}
-                {tab === "postmortem" && <PostmortemEditorView />}
                 {tab === "ops" && <DocsAdminAndOpsView />}
                 {tab === "settings" && <SettingsView />}
               </div>

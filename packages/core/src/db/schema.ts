@@ -1,6 +1,5 @@
 import {
   customType,
-  doublePrecision,
   index,
   integer,
   jsonb,
@@ -37,7 +36,6 @@ export type Severity = (typeof SEVERITIES)[number];
 
 export const INCIDENT_STATUSES = [
   "investigating",
-  "awaiting_approval",
   "monitoring",
   "resolved",
 ] as const;
@@ -45,9 +43,6 @@ export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
 
 export const DOCUMENT_STATUSES = ["pending", "indexed", "failed"] as const;
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
-
-export const APPROVAL_DECISIONS = ["pending", "approved", "rejected"] as const;
-export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number];
 
 export const DEPLOYMENT_PLATFORMS = [
   "cloud_run",
@@ -284,7 +279,7 @@ export const documentChunks = pgTable(
 export const chunks = documentChunks;
 
 /* -------------------------------------------------------------------------- */
-/* Incidents & approvals                                                      */
+/* Incidents (failure evaluations)                                            */
 /* -------------------------------------------------------------------------- */
 
 export const incidents = pgTable(
@@ -312,122 +307,8 @@ export const incidents = pgTable(
   (t) => [index("incidents_org_status_idx").on(t.orgId, t.status)],
 );
 
-export type ProposedAction = {
-  kind: "create_ticket" | "post_status" | "schedule_followup";
-  title: string;
-  target: string;
-  payload: Record<string, unknown>;
-  rationale: string;
-  evidenceIds: string[];
-  idempotencyKey: string;
-};
-
-export const approvals = pgTable(
-  "approvals",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    incidentId: uuid("incident_id")
-      .notNull()
-      .references(() => incidents.id, { onDelete: "cascade" }),
-    action: jsonb("action").$type<ProposedAction>().notNull(),
-    decision: text("decision", { enum: APPROVAL_DECISIONS })
-      .notNull()
-      .default("pending"),
-    decidedBy: uuid("decided_by").references(() => user.id, {
-      onDelete: "set null",
-    }),
-    decidedAt: timestamp("decided_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [index("approvals_org_decision_idx").on(t.orgId, t.decision)],
-);
-
-/** One row per executed external write. The key makes retries safe. */
-export const actionLog = pgTable("action_log", {
-  idempotencyKey: text("idempotency_key").primaryKey(),
-  orgId: uuid("org_id")
-    .notNull()
-    .references(() => orgs.id, { onDelete: "cascade" }),
-  result: jsonb("result").$type<Record<string, unknown>>(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
 /* -------------------------------------------------------------------------- */
-/* Operations & governance                                                    */
-/* -------------------------------------------------------------------------- */
-
-/** Token and cost ledger, one row per LLM call. */
-export const modelUsage = pgTable(
-  "model_usage",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    graph: text("graph", { enum: ["ask", "incident", "postmortem"] }).notNull(),
-    threadId: text("thread_id"),
-    model: text("model").notNull(),
-    inputTokens: integer("input_tokens").notNull().default(0),
-    outputTokens: integer("output_tokens").notNull().default(0),
-    costUsd: doublePrecision("cost_usd").notNull().default(0),
-    latencyMs: integer("latency_ms"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [index("model_usage_org_created_idx").on(t.orgId, t.createdAt)],
-);
-
-export const tenantBudgets = pgTable("tenant_budgets", {
-  orgId: uuid("org_id")
-    .primaryKey()
-    .references(() => orgs.id, { onDelete: "cascade" }),
-  monthlyLimitUsd: doublePrecision("monthly_limit_usd").notNull().default(250),
-});
-
-export const auditEvents = pgTable(
-  "audit_events",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    actorId: uuid("actor_id").references(() => user.id, {
-      onDelete: "set null",
-    }),
-    event: text("event").notNull(),
-    detail: jsonb("detail").$type<Record<string, unknown>>().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [index("audit_events_org_created_idx").on(t.orgId, t.createdAt)],
-);
-
-export const feedback = pgTable("feedback", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  orgId: uuid("org_id")
-    .notNull()
-    .references(() => orgs.id, { onDelete: "cascade" }),
-  userId: uuid("user_id").references(() => user.id, { onDelete: "set null" }),
-  traceId: text("trace_id").notNull(),
-  rating: text("rating", { enum: ["helpful", "flagged"] }).notNull(),
-  comment: text("comment"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
-/* -------------------------------------------------------------------------- */
-/* Read-only operations data (queried by the `data` / `history` specialists)  */
-/* Kept in the same file for now. Move to a separate DB + role later.         */
+/* Operations data (services & recent deploys)                                */
 /* -------------------------------------------------------------------------- */
 
 export const opsServices = pgTable(
@@ -483,23 +364,6 @@ export const opsDeploys = pgTable(
   ],
 );
 
-export const opsPastIncidents = pgTable(
-  "ops_past_incidents",
-  {
-    id: text("id").primaryKey(), // e.g. "INC-1812"
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    service: text("service").notNull(),
-    summary: text("summary").notNull(),
-    rootCause: text("root_cause"),
-    resolution: text("resolution"),
-    minutesToResolve: integer("minutes_to_resolve"),
-    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  },
-  (t) => [index("ops_past_incidents_org_service_idx").on(t.orgId, t.service)],
-);
-
 /* -------------------------------------------------------------------------- */
 /* Inferred row types                                                         */
 /* -------------------------------------------------------------------------- */
@@ -514,10 +378,6 @@ export type Chunk = DocumentChunk;
 export type NewChunk = NewDocumentChunk;
 export type Incident = typeof incidents.$inferSelect;
 export type NewIncident = typeof incidents.$inferInsert;
-export type Approval = typeof approvals.$inferSelect;
-export type NewApproval = typeof approvals.$inferInsert;
-export type ActionLogEntry = typeof actionLog.$inferSelect;
-export type ModelUsage = typeof modelUsage.$inferSelect;
 
 export * from "./chat-schema";
 export * from "./integrations-schema";

@@ -8,11 +8,10 @@ import {
   X,
   Terminal,
   Layers,
-  Globe,
   Loader2,
   Slash,
 } from "lucide-react";
-import type { Mode, Severity } from "../../types/vigil";
+import type { Severity } from "../../types/vigil";
 import { uploadDocPdf } from "../../lib/api";
 
 interface AttachedFile {
@@ -23,8 +22,6 @@ interface AttachedFile {
 }
 
 interface PromptComposerProps {
-  currentMode: Mode;
-  onChangeMode: (mode: Mode) => void;
   severity: Severity;
   onChangeSeverity: (sev: Severity) => void;
   onSubmit: (content: string, attachments?: AttachedFile[]) => void;
@@ -34,21 +31,12 @@ interface PromptComposerProps {
 }
 
 const SLASH_TOOLS = [
-  { label: "/runbooks", desc: "Search indexed runbooks", icon: FileText },
   { label: "/deploys", desc: "Inspect recent commits & diffs", icon: Layers },
   { label: "/live-logs", desc: "Tail recent service error logs", icon: Terminal },
-  { label: "/web", desc: "Check cloud status & docs", icon: Globe },
-];
-
-const MODES: { id: Mode; label: string }[] = [
-  { id: "ask", label: "Ask" },
-  { id: "incident", label: "Incident" },
-  { id: "postmortem", label: "Postmortem" },
+  { label: "/runbooks", desc: "Search indexed runbooks", icon: FileText },
 ];
 
 export const PromptComposer: React.FC<PromptComposerProps> = ({
-  currentMode,
-  onChangeMode,
   severity,
   onChangeSeverity,
   onSubmit,
@@ -125,7 +113,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
         );
       } catch {
         setAttachedFiles((prev) =>
-          prev.map((f) => (f.name === file.name ? { ...f, status: "queued" } : f))
+          prev.map((f) => (f.name === file.name ? { ...f, status: "failed" } : f))
         );
       }
     }
@@ -144,13 +132,10 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   };
 
   const defaultPlaceholder =
-    currentMode === "incident"
-      ? "Describe the incident, paste an error trace, or name a service..."
-      : currentMode === "postmortem"
-        ? "Describe the incident or notes to draft a postmortem..."
-        : "Ask Vigil anything about runbooks, deploys, or logs...";
+    "Describe the deployment failure, paste an error trace, or name a service...";
 
-  const canSend = (input.trim().length > 0 || attachedFiles.length > 0) && !isGenerating;
+  const canSend =
+    (input.trim().length > 0 || attachedFiles.length > 0) && !isGenerating;
 
   return (
     <div className="mx-auto w-full max-w-[740px]">
@@ -167,7 +152,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 <span className="font-mono-only text-[10.5px] text-[#7c7e87]">
                   {file.status === "uploading"
                     ? "uploading…"
-                    : `${Math.max(1, Math.round(file.size / 1024))}KB`}
+                    : file.status === "failed"
+                      ? "failed"
+                      : `${Math.max(1, Math.round(file.size / 1024))}KB`}
                 </span>
                 <button
                   type="button"
@@ -190,7 +177,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder || defaultPlaceholder}
-            aria-label="Message Vigil"
+            aria-label="Describe deployment failure"
             className="dash-scroll dash-composer-input max-h-[200px] min-h-[44px] w-full resize-none border-0 bg-transparent text-[15px] leading-[1.6] text-[#f2f2f4] placeholder:text-[#7c7f8a] outline-none focus:outline-none focus-visible:outline-none"
           />
         </div>
@@ -198,7 +185,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept="application/pdf,text/plain,application/json"
+          accept="application/pdf"
           multiple
           className="hidden"
           onChange={handleFileUpload}
@@ -210,8 +197,8 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[#9b9da6] transition-colors hover:border-white/[0.15] hover:bg-white/[0.08] hover:text-[#f2f2f4]"
-              title="Attach PDF runbook or artifact"
-              aria-label="Attach PDF runbook or artifact"
+              title="Attach PDF runbook"
+              aria-label="Attach PDF runbook"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -222,7 +209,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 onClick={() => setToolsOpen((v) => !v)}
                 aria-expanded={toolsOpen}
                 aria-haspopup="menu"
-                title="Insert tool command"
+                title="Insert tool hint"
                 className={`flex h-8 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[12px] font-medium transition-colors ${
                   toolsOpen
                     ? "bg-white/[0.1] text-[#f2f2f4]"
@@ -264,71 +251,46 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               )}
             </div>
 
-            <span className="mx-0.5 hidden h-4 w-px bg-white/[0.08] sm:inline-block" aria-hidden="true" />
+            <span
+              className="mx-0.5 hidden h-4 w-px bg-white/[0.08] sm:inline-block"
+              aria-hidden="true"
+            />
 
             <div
               role="group"
-              aria-label="Copilot mode"
+              aria-label="Failure severity"
               className="inline-flex items-center rounded-full bg-white/[0.04] p-0.5"
             >
-              {MODES.map((m) => {
-                const active = currentMode === m.id;
+              {(["SEV-1", "SEV-2", "SEV-3"] as Severity[]).map((s) => {
+                const active = severity === s;
                 return (
                   <button
-                    key={m.id}
+                    key={s}
                     type="button"
-                    onClick={() => onChangeMode(m.id)}
-                    className={`cursor-pointer rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                    onClick={() => onChangeSeverity(s)}
+                    className={`font-mono-only cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                       active
-                        ? m.id === "incident"
-                          ? "bg-[#e56b4e]/18 text-[#fba792]"
-                          : "bg-white/[0.11] text-[#f2f2f4]"
-                        : "text-[#8e909a] hover:text-[#e2e3e8]"
+                        ? s === "SEV-1"
+                          ? "bg-rose-500/20 text-rose-300"
+                          : s === "SEV-2"
+                            ? "bg-amber-500/20 text-amber-300"
+                            : "bg-white/[0.11] text-[#f2f2f4]"
+                        : "text-[#848791] hover:text-[#d8dae0]"
                     }`}
                   >
-                    {m.label}
+                    {s}
                   </button>
                 );
               })}
             </div>
-
-            {currentMode === "incident" && (
-              <div
-                role="group"
-                aria-label="Incident severity"
-                className="dash-fade inline-flex items-center rounded-full bg-white/[0.04] p-0.5"
-              >
-                {(["SEV-1", "SEV-2", "SEV-3"] as Severity[]).map((s) => {
-                  const active = severity === s;
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => onChangeSeverity(s)}
-                      className={`font-mono-only cursor-pointer rounded-full px-2 py-1 text-[11px] font-medium transition-colors ${
-                        active
-                          ? s === "SEV-1"
-                            ? "bg-rose-500/20 text-rose-300"
-                            : s === "SEV-2"
-                              ? "bg-amber-500/20 text-amber-300"
-                              : "bg-white/[0.11] text-[#f2f2f4]"
-                          : "text-[#848791] hover:text-[#d8dae0]"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
           <button
             type="button"
             onClick={handleSend}
             disabled={!canSend}
-            aria-label="Send message"
-            title="Send (Enter)"
+            aria-label="Evaluate failure"
+            title="Evaluate (Enter)"
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all ${
               canSend
                 ? "cursor-pointer bg-[#f2f2f4] text-[#141518] hover:bg-white active:scale-95"
@@ -346,7 +308,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
 
       {showDisclaimer && (
         <p className="mt-2.5 text-center text-[11.5px] text-[#6e717c]">
-          Vigil checks runbooks and telemetry. Remediation actions always require operator approval.
+          Vigil correlates recent deploys, live logs, and indexed runbooks to diagnose failures and suggest fixes.
         </p>
       )}
     </div>

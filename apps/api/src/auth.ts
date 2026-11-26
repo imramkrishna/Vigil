@@ -4,7 +4,6 @@ import {
   members,
   orgs,
   schema,
-  tenantBudgets,
   withOrgContext,
   withUserContext,
 } from "@vigil/core";
@@ -67,17 +66,12 @@ export const auth = betterAuth({
 
           if (!org) return;
 
-          // Provision membership and tenant budget inside the new org's RLS context
+          // Provision membership inside the new org's RLS context
           await withOrgContext(org.id, async (tx) => {
             await tx.insert(members).values({
               orgId: org.id,
               userId: createdUser.id,
               role: "admin",
-            });
-
-            await tx.insert(tenantBudgets).values({
-              orgId: org.id,
-              monthlyLimitUsd: 250,
             });
           });
         },

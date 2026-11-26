@@ -7,8 +7,6 @@ import {
   fetchGitHubDeploysForOrg,
   getLiveLogs,
   getLogsByTimestamp,
-  getMonthlyBudgetStatus,
-  getPastIncidents,
   getRecentDeploys,
   INTEGRATION_AUTH_METHODS,
   INTEGRATION_PROVIDERS,
@@ -352,35 +350,21 @@ export async function deleteIntegrationController(req: Request, res: Response) {
   }
 }
 
-// GET /api/ops/deploys — List recent deploys & past incidents
+// GET /api/ops/deploys — List recent deploys
 export async function listDeploysController(req: Request, res: Response) {
   try {
     const { orgId } = req.auth!;
     const service = req.query.service as string | undefined;
 
-    const [dbDeploys, ghDeploys, pastIncidents] = await Promise.all([
+    const [dbDeploys, ghDeploys] = await Promise.all([
       getRecentDeploys(orgId, service, 15),
       fetchGitHubDeploysForOrg(orgId, service, 10),
-      getPastIncidents(orgId, { service, limit: 10 }),
     ]);
 
-    res.json({ deploys: [...ghDeploys, ...dbDeploys], pastIncidents });
+    res.json({ deploys: [...ghDeploys, ...dbDeploys] });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch deploys";
-    res.status(500).json({ error: message });
-  }
-}
-
-// GET /api/ops/budget — Get monthly LLM token spend & budget status
-export async function getBudgetController(req: Request, res: Response) {
-  try {
-    const { orgId } = req.auth!;
-    const budget = await getMonthlyBudgetStatus(orgId);
-    res.json({ budget });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to fetch budget status";
     res.status(500).json({ error: message });
   }
 }

@@ -2,7 +2,6 @@ import { Router } from "express";
 import {
   createIntegrationController,
   deleteIntegrationController,
-  getBudgetController,
   getLogsController,
   listDeploysController,
   listIntegrationsController,
@@ -52,4 +51,3 @@ opsRouter.delete(
 );
 
 opsRouter.get("/deploys", requireAuth, listDeploysController);
-opsRouter.get("/budget", requireAuth, getBudgetController);
