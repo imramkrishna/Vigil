@@ -1,3 +1,15 @@
+CREATE TABLE IF NOT EXISTS "ops_service_logs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"org_id" uuid NOT NULL,
+	"service_id" uuid NOT NULL,
+	"timestamp" timestamp with time zone NOT NULL,
+	"level" text DEFAULT 'info' NOT NULL,
+	"message" text NOT NULL,
+	"trace_id" text,
+	"metadata" jsonb,
+	"ingested_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "org_integrations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"org_id" uuid NOT NULL,
@@ -15,37 +27,35 @@ CREATE TABLE IF NOT EXISTS "org_integrations" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "ops_service_logs" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"org_id" uuid NOT NULL,
-	"service_id" uuid NOT NULL,
-	"timestamp" timestamp with time zone NOT NULL,
-	"level" text DEFAULT 'info' NOT NULL,
-	"message" text NOT NULL,
-	"trace_id" text,
-	"metadata" jsonb,
-	"ingested_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 ALTER TABLE "ops_services" ADD COLUMN IF NOT EXISTS "integration_id" uuid;
 --> statement-breakpoint
-ALTER TABLE "org_integrations" ADD CONSTRAINT "org_integrations_org_id_orgs_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."orgs"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN
+  ALTER TABLE "ops_service_logs" ADD CONSTRAINT "ops_service_logs_org_id_orgs_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."orgs"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "org_integrations" ADD CONSTRAINT "org_integrations_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;
+DO $$ BEGIN
+  ALTER TABLE "ops_service_logs" ADD CONSTRAINT "ops_service_logs_service_id_ops_services_id_fk" FOREIGN KEY ("service_id") REFERENCES "public"."ops_services"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "ops_services" ADD CONSTRAINT "ops_services_integration_id_org_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."org_integrations"("id") ON DELETE set null ON UPDATE no action;
+DO $$ BEGIN
+  ALTER TABLE "org_integrations" ADD CONSTRAINT "org_integrations_org_id_orgs_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."orgs"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "ops_service_logs" ADD CONSTRAINT "ops_service_logs_org_id_orgs_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."orgs"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN
+  ALTER TABLE "org_integrations" ADD CONSTRAINT "org_integrations_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "ops_service_logs" ADD CONSTRAINT "ops_service_logs_service_id_ops_services_id_fk" FOREIGN KEY ("service_id") REFERENCES "public"."ops_services"("id") ON DELETE cascade ON UPDATE no action;
+CREATE INDEX IF NOT EXISTS "ops_service_logs_org_svc_time_idx" ON "ops_service_logs" USING btree ("org_id","service_id","timestamp");
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "ops_service_logs_ingested_idx" ON "ops_service_logs" USING btree ("ingested_at");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "org_integrations_org_provider_idx" ON "org_integrations" USING btree ("org_id","provider");
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "org_integrations_org_name_uq" ON "org_integrations" USING btree ("org_id","name");
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "ops_service_logs_org_svc_time_idx" ON "ops_service_logs" USING btree ("org_id","service_id","timestamp");
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "ops_service_logs_ingested_idx" ON "ops_service_logs" USING btree ("ingested_at");
+DO $$ BEGIN
+  ALTER TABLE "ops_services" ADD CONSTRAINT "ops_services_integration_id_org_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."org_integrations"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
 ALTER TABLE "org_integrations" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
