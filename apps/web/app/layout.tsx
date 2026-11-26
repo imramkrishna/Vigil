@@ -18,9 +18,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Vigil — Autonomous Engineering Operations & Incident Copilot",
+  title: "Vigil — Deployment Failure Evaluation & Fix Copilot",
   description:
-    "Multi-tenant AI Engineering Operations Copilot for cited runbook Q&A, parallel incident triage, role-gated approvals, and evidence-backed postmortems.",
+    "AI deployment failure evaluator that correlates recent deploys, live multi-cloud logs, and indexed runbooks to diagnose root causes and suggest actionable fixes.",
   icons: {
     icon: [
       { url: "/vigil.svg", type: "image/svg+xml" },

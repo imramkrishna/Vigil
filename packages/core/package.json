@@ -18,12 +18,10 @@
     "@langchain/textsplitters": "^1.0.2",
     "@octokit/rest": "^22.0.1",
     "drizzle-orm": "^0.45.4",
-    "firecrawl": "^4.51.0",
     "google-auth-library": "^11.3.4",
     "langchain": "^1.6.0",
     "pdf-parse": "^2.4.5",
     "pg": "^8.23.1",
-    "save-dev": "0.0.1-security",
     "zod": "^4.6.7"
   },
   "devDependencies": {

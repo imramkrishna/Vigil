@@ -23,7 +23,7 @@ import {
   IncidentRoomView,
   type LiveIncidentData,
 } from "@/components/IncidentRoomView";
-import { AskCopilotView } from "@/components/AskCopilotView";
+import { VigilCopilotChat } from "@/components/chat/VigilCopilotChat";
 import { ChatHistoryView } from "@/components/ChatHistoryView";
 import { DocsAdminAndOpsView } from "@/components/DocsAdminAndOpsView";
 import { SettingsView } from "@/components/SettingsView";
@@ -585,8 +585,9 @@ function DashboardContent() {
             tab === "ask" ? "h-full w-full overflow-hidden" : "hidden"
           }
         >
-          <AskCopilotView
+          <VigilCopilotChat
             key={chatInstanceKey}
+            embedded
             initialConversationId={activeConversationId}
             initialThreadId={activeChatId}
             initialTurns={activeInitialTurns}

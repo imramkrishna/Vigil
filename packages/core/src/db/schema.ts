@@ -157,7 +157,7 @@ export const members = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
-/* Knowledge base (runbooks, postmortems, architecture docs)                  */
+/* Knowledge base (runbooks & architecture docs)                              */
 /* -------------------------------------------------------------------------- */
 
 export const documents = pgTable(

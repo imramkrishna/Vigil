@@ -19,72 +19,62 @@ interface CommandRow {
 
 const COMMAND_ROWS: CommandRow[] = [
   {
-    id: "triage",
-    label: "Triage Incident & Fan-Out Specialists",
-    argChip: "INC-2048 • SEV-1",
-    category: "Incident Graph",
+    id: "evaluate",
+    label: "Evaluate Deployment Failure: checkout-api 502s",
+    argChip: "SEV-1 • live logs + diffs",
+    category: "Evaluation",
     shortcut: "⌘ ↵",
+    dashboardTab: "ask",
+    previewSummary:
+      "Correlated deploy sha 9f3c1a2 with Cloud Run 502 logs and runbook chunks • H1 confidence 94%",
+  },
+  {
+    id: "fixes",
+    label: "Suggested Fix: Rollback checkout-api v2.14.8",
+    argChip: "P0 • copyable patch",
+    category: "Suggested Fixes",
+    shortcut: "⌘ F",
     dashboardTab: "incident",
     previewSummary:
-      "Parallel Send() to docs, data, and history specialists • 3 Evidence citations verified • H1 confidence 94%",
+      "Ranked root causes paired with prioritized P0/P1/P2 rollback commands and config fixes",
   },
   {
-    id: "approve",
-    label: "Approve Remediation: Rollback checkout-api v2.14.8",
-    argChip: "interrupt() • role: lead",
-    category: "Approval Gate",
-    shortcut: "⌘ A",
-    dashboardTab: "approvals",
-    previewSummary:
-      "Paused at approval_gate • Idempotency key act_inc2048_01_ticket • Requires responder, lead, or admin",
-  },
-  {
-    id: "crag",
-    label: "Search Hybrid Runbooks: pgBouncer Pool Saturation",
+    id: "runbooks",
+    label: "Search Indexed Runbooks: pgBouncer Pool Saturation",
     argChip: "RRF: 0.94 • vector+tsv",
-    category: "Ask Graph",
+    category: "Runbooks RAG",
     shortcut: "⌘ K",
-    dashboardTab: "ask",
+    dashboardTab: "ops",
     previewSummary:
-      "pgvector HNSW + PostgreSQL tsvector GIN fused via Reciprocal Rank Fusion (k=60) + CRAG relevance grading",
+      "pgvector HNSW + PostgreSQL tsvector GIN fused via Reciprocal Rank Fusion for cited remediation",
   },
   {
-    id: "sql",
-    label: "Query Read-Only Ops Metrics: EU-West 504 Latency",
-    argChip: "SELECTONLY • 5s cap",
-    category: "Ops Tool",
-    shortcut: "⌘ D",
-    dashboardTab: "ask",
+    id: "logs",
+    label: "Inspect Multi-Cloud Live Logs: GCP, AWS, Render, Vercel, VPS",
+    argChip: "live tail • timestamp window",
+    category: "Live Telemetry",
+    shortcut: "⌘ L",
+    dashboardTab: "settings",
     previewSummary:
-      "AST-validated SELECT query inside READ ONLY transaction • p99 latency 4,820ms • cl_waiting=148",
-  },
-  {
-    id: "postmortem",
-    label: "Synthesize Blameless Postmortem Draft",
-    argChip: "6 sections • [ev_01..03]",
-    category: "Postmortem Graph",
-    shortcut: "⌘ P",
-    dashboardTab: "postmortem",
-    previewSummary:
-      "Auto-compiles timeline, root cause, and action_log ledger into editable Markdown paused at review interrupt",
+      "Read-only log connectors with automatic secret redaction and deploy-window correlation",
   },
 ];
 
 const FEATURES = [
   {
-    title: "Find the cause fast",
-    body: "Vigil checks your runbooks, metrics, and past incidents in parallel and ranks the likely root causes.",
-    detail: "Docs + Metrics + History",
+    title: "Detect the cause fast",
+    body: "Vigil correlates your recent GitHub deploys, live service logs, and indexed runbooks to rank likely root causes.",
+    detail: "Deploys + Live Logs + Runbooks",
   },
   {
-    title: "Every answer has sources",
-    body: "Each claim links back to the runbook, query, or incident it came from. Nothing is made up.",
+    title: "Every evaluation is cited",
+    body: "Each hypothesis links back to the exact deploy SHA, log line, or runbook passage it came from.",
     detail: "Cited [ev_01] [ev_02] [ev_03]",
   },
   {
-    title: "You approve every action",
-    body: "Tickets and Slack posts wait for a teammate's approval. Vigil never writes anything on its own.",
-    detail: "Role-based approvals",
+    title: "Actionable fixes ready to run",
+    body: "Get prioritized P0/P1/P2 rollback commands and config patches grounded in your own runbooks.",
+    detail: "Ranked hypotheses + fixes",
   },
 ];
 
@@ -94,10 +84,10 @@ const HYPOTHESES = [
 ];
 
 const STEPS = [
-  { n: "01", title: "Alert fires", body: "Declare an incident or let Vigil pick it up." },
-  { n: "02", title: "Vigil investigates", body: "Docs, data, and history are searched at once." },
-  { n: "03", title: "You approve", body: "Review the suggested fixes and approve in one click." },
-  { n: "04", title: "Postmortem drafted", body: "A cited summary is ready to edit when you resolve." },
+  { n: "01", title: "Deployment fails", body: "Report a failure, error trace, or affected service." },
+  { n: "02", title: "Vigil investigates", body: "Recent deploys, live logs, and runbooks are inspected automatically." },
+  { n: "03", title: "Root causes ranked", body: "Hypotheses are scored with direct evidence from your stack." },
+  { n: "04", title: "Fixes suggested", body: "Review prioritized rollback commands and patches to resolve fast." },
 ];
 
 export default function HomePage() {
@@ -118,14 +108,13 @@ export default function HomePage() {
          ==================================================================== */}
       <section className="relative z-10 mx-auto flex max-w-[1440px] flex-col items-center px-4 pt-24 pb-16 sm:px-8 sm:pt-28">
         <h1 className="hero-headline max-w-[920px] text-center">
-          Autonomous incident triage,{" "}
+          Deployment failure evaluation,{" "}
           <span className="warm-accent-word">grounded</span> in every runbook.
         </h1>
 
         <p className="mt-4 max-w-[640px] text-center text-[17px] sm:text-[18px] font-normal leading-[1.55] text-[#9c9c9d]">
-          Vigil coordinates parallel docs, metrics, and history specialists in
-          one command bar—pausing at role-gated human approvals before any
-          external write.
+          Vigil correlates recent deploys, live multi-cloud logs, and indexed
+          runbooks to diagnose root causes and suggest concrete fixes.
         </p>
 
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
@@ -323,10 +312,10 @@ export default function HomePage() {
 
           <div className="flex items-center justify-between gap-3 border-t border-white/10 bg-black/30 px-5 py-3">
             <div className="text-[13px] text-[#9c9c9d]">
-              Waiting for approval: <span className="text-white">Roll back checkout-api to v2.14.7</span>
+              Suggested P0 fix: <span className="text-white">Roll back checkout-api to v2.14.7</span>
             </div>
-            <span className="shrink-0 rounded-md bg-[#e6e6e6] px-3 py-1 text-[12px] font-medium text-[#2f3031]">
-              Approve
+            <span className="font-mono-only shrink-0 rounded-md bg-[#e6e6e6] px-3 py-1 text-[12px] font-medium text-[#2f3031]">
+              Copy fix
             </span>
           </div>
         </div>
