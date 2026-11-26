@@ -1,8 +1,14 @@
 import { Worker } from "bullmq";
 import { redisConnection } from "./redis";
-import { INJESTION_QUEUE, type IngestionJobData } from "./types";
+import {
+  INJESTION_QUEUE,
+  LOG_RETENTION_QUEUE,
+  type IngestionJobData,
+  type LogRetentionJobData,
+} from "./types";
 import { ingestDocument } from "./ingestDocument";
-import { markDocumentFailed } from "@vigil/core";
+import { logRetentionQueue } from "./queue";
+import { markDocumentFailed, pruneExpiredServiceLogs } from "@vigil/core";
 
 export const injestionWorker = new Worker<IngestionJobData>(
   INJESTION_QUEUE,
@@ -47,5 +53,34 @@ injestionWorker.on("failed", async (job, err) => {
     await markDocumentFailed(job.data.orgId, job.data.documentId, err.message);
   }
 });
+
+/** Daily retention worker pruning ops_service_logs older than 14 days. */
+export const logRetentionWorker = new Worker<LogRetentionJobData>(
+  LOG_RETENTION_QUEUE,
+  async (job) => {
+    const retentionDays = job.data?.retentionDays ?? 14;
+    const pruned = await pruneExpiredServiceLogs(retentionDays);
+    console.log(
+      `[Worker] Pruned ${pruned} expired ops_service_logs rows (> ${retentionDays} days).`
+    );
+    return { pruned };
+  },
+  {
+    connection: redisConnection,
+  }
+);
+
+logRetentionQueue
+  .upsertJobScheduler(
+    "daily-ops-service-logs-retention",
+    { pattern: "0 3 * * *" },
+    {
+      name: "prune-ops-service-logs",
+      data: { retentionDays: 14 },
+    }
+  )
+  .catch((err) => {
+    console.error("[Worker] Failed to schedule daily log retention job:", err);
+  });
 
 console.log("👷 Worker is running and waiting for jobs.");

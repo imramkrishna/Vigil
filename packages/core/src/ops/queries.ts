@@ -372,6 +372,7 @@ export async function listOpsServices(orgId: string) {
 
 export async function upsertOpsService(params: {
   orgId: string;
+  integrationId?: string | null;
   name: string;
   tier?: number;
   owner?: string;
@@ -387,6 +388,7 @@ export async function upsertOpsService(params: {
       .insert(opsServices)
       .values({
         orgId: params.orgId,
+        integrationId: params.integrationId ?? null,
         name: params.name.trim(),
         tier: params.tier ?? 1,
         owner: params.owner ?? null,
@@ -400,6 +402,7 @@ export async function upsertOpsService(params: {
       .onConflictDoUpdate({
         target: [opsServices.orgId, opsServices.name],
         set: {
+          integrationId: params.integrationId ?? null,
           tier: params.tier ?? 1,
           owner: params.owner ?? null,
           slackChannel: params.slackChannel ?? null,

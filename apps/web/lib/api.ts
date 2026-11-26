@@ -1,8 +1,13 @@
 import type {
   ActionItem,
   Citation,
+  DeploymentPlatform,
   Hypothesis,
+  IntegrationAuthMethod,
+  IntegrationProvider,
+  OrgIntegrationRow,
   ProposedAction,
+  ServiceLogEntry,
   ServiceRegistrationPayload,
   Severity,
 } from "../types/vigil";
@@ -256,6 +261,96 @@ export async function registerService(payload: ServiceRegistrationPayload) {
     }
   );
   return res.service;
+}
+
+export async function testServiceLogs(payload: {
+  name?: string;
+  platform: DeploymentPlatform;
+  integrationId?: string | null;
+  logUrl?: string;
+  platformConfig?: Record<string, unknown>;
+}) {
+  return apiFetch<{
+    ok: boolean;
+    provider: string;
+    message: string;
+    authError?: boolean;
+    sampleCount?: number;
+    latencyMs?: number;
+  }>("/api/ops/services/test-logs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchServiceLogs(params: {
+  service: string;
+  live?: boolean;
+  lines?: number;
+  startTime?: string;
+  endTime?: string;
+  level?: "debug" | "info" | "warn" | "error" | "fatal";
+  keyword?: string;
+  limit?: number;
+}): Promise<ServiceLogEntry[]> {
+  const sp = new URLSearchParams();
+  sp.set("service", params.service);
+  if (params.live) sp.set("live", "true");
+  if (params.lines) sp.set("lines", String(params.lines));
+  if (params.startTime) sp.set("startTime", params.startTime);
+  if (params.endTime) sp.set("endTime", params.endTime);
+  if (params.level) sp.set("level", params.level);
+  if (params.keyword) sp.set("keyword", params.keyword);
+  if (params.limit) sp.set("limit", String(params.limit));
+
+  const res = await apiFetch<{ logs: ServiceLogEntry[] }>(
+    `/api/ops/logs?${sp.toString()}`
+  );
+  return res.logs ?? [];
+}
+
+// ─── Cloud Integrations ──────────────────────────────────────────────
+
+export async function listIntegrations(provider?: IntegrationProvider) {
+  const q = provider ? `?provider=${encodeURIComponent(provider)}` : "";
+  return apiFetch<{
+    integrations: OrgIntegrationRow[];
+    vigilServiceAccountEmail: string;
+    vigilAwsAccountId: string;
+  }>(`/api/ops/integrations${q}`);
+}
+
+export async function createIntegration(payload: {
+  provider: IntegrationProvider;
+  name: string;
+  authMethod: IntegrationAuthMethod;
+  publicConfig?: Record<string, unknown>;
+  secret?: string;
+}) {
+  return apiFetch<{
+    integration: OrgIntegrationRow;
+    testResult?: { ok: boolean; message: string } | null;
+    oneTimeIngestToken?: string;
+  }>("/api/ops/integrations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function testIntegration(id: string) {
+  return apiFetch<{
+    result: { ok: boolean; message: string; latencyMs?: number };
+    integration: OrgIntegrationRow | null;
+  }>(`/api/ops/integrations/${id}/test`, {
+    method: "POST",
+  });
+}
+
+export async function deleteIntegration(id: string) {
+  return apiFetch<{ deleted: boolean; id: string }>(
+    `/api/ops/integrations/${id}`,
+    { method: "DELETE" }
+  );
 }
 
 export async function listDeploys(service?: string) {

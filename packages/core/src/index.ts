@@ -3,6 +3,7 @@ export * from "./model-layer";
 export * from "./retrieval";
 export * from "./ops";
 export * from "./chat";
+export * from "./security";
 export * from "./config/s3.config";
 export * from "./config/s3.services";
 export * from "./config/firecrawl";

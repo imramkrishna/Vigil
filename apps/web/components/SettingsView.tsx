@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { connectGitHubAccount, getMe } from "@/lib/api";
+import { IntegrationsSettingsPanel } from "./ops/IntegrationsSettingsPanel";
 
-type Section = "profile" | "team" | "billing" | "notifications";
+type Section = "profile" | "integrations" | "team" | "billing" | "notifications";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "profile", label: "Profile" },
+  { id: "integrations", label: "Integrations" },
   { id: "team", label: "Team" },
   { id: "billing", label: "Billing" },
   { id: "notifications", label: "Notifications" },
@@ -404,6 +406,10 @@ export function SettingsView() {
             </form>
           </Card>
         </div>
+      )}
+
+      {section === "integrations" && (
+        <IntegrationsSettingsPanel onNotice={flash} />
       )}
 
       {section === "team" && (
